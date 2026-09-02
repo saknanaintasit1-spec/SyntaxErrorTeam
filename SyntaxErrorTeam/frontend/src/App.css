@@ -184,8 +184,14 @@
 }
 .card {
   width: 300px;
-  height: 150px;
+  height: fill-parent;
   border-radius: 20px;
   border: 2px solid black;
   padding: 20px;
+  background-color: #087c7c;
+}
+.vstack{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
