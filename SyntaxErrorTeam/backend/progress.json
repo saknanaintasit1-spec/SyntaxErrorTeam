@@ -1,3 +1,62 @@
 {
-  "Algebra": 1
+  "Algebra": 3,
+  "Polynomials": 3,
+  "Pythagoras & Geometry": 3,
+  "meta": {
+    "tokens": 0,
+    "xp": 20,
+    "stats": {
+      "practiceProblems": 2,
+      "correctStreak": 2,
+      "bestCorrectStreak": 2,
+      "lessonsCompleted": 0,
+      "noHintProblems": 0,
+      "correctSteps": 8,
+      "retrySolved": 0,
+      "sessionsAt80": 2,
+      "sessionsAt100": 2,
+      "algebraProblems": 0,
+      "pythagorasProblems": 0,
+      "polynomialProblems": 2,
+      "challengeProblems": 0,
+      "practiceMinutes": 0,
+      "firstAttemptProblems": 0,
+      "topics": [
+        "Polynomials"
+      ]
+    },
+    "dailyDate": "2026-09-04",
+    "missions": [
+      {
+        "id": 1,
+        "title": "Complete 10 practice problems",
+        "tokens": 10,
+        "xp": 50,
+        "progress": 2,
+        "target": 10,
+        "stat": "practiceProblems",
+        "completed": false
+      },
+      {
+        "id": 2,
+        "title": "Solve 5 algebra problems",
+        "tokens": 7,
+        "xp": 35,
+        "progress": 0,
+        "target": 5,
+        "stat": "algebraProblems",
+        "completed": false
+      },
+      {
+        "id": 3,
+        "title": "Complete 1 challenge problem",
+        "tokens": 8,
+        "xp": 40,
+        "progress": 0,
+        "target": 1,
+        "stat": "challengeProblems",
+        "completed": false
+      }
+    ]
+  }
 }

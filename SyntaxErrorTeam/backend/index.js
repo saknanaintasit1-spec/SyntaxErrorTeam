@@ -5,14 +5,77 @@ const app = express()
 const port = process.env.PORT || 3001
 const progressFile = path.join(__dirname, 'progress.json')
 
+const DAILY_MISSION_DEFINITIONS = [
+  ['Complete 5 practice problems', 5, 25, 'practiceProblems', 5],
+  ['Complete 10 practice problems', 10, 50, 'practiceProblems', 10],
+  ['Get 5 questions correct in a row', 8, 40, 'correctStreak', 5],
+  ['Complete 1 lesson', 10, 50, 'lessonsCompleted', 1],
+  ['Complete 2 lessons', 18, 90, 'lessonsCompleted', 2],
+  ['Solve 3 problems without using a hint', 7, 35, 'noHintProblems', 3],
+  ['Complete 10 correct steps', 7, 35, 'correctSteps', 10],
+  ['Retry and solve 3 previously missed questions', 8, 40, 'retrySolved', 3],
+  ['Complete a practice session with 80%+ accuracy', 9, 45, 'sessionsAt80', 1],
+  ['Complete a practice session with 100% accuracy', 15, 70, 'sessionsAt100', 1],
+  ['Solve 5 algebra problems', 7, 35, 'algebraProblems', 5],
+  ['Solve 5 Pythagoras problems', 7, 35, 'pythagorasProblems', 5],
+  ['Solve 5 polynomial problems', 7, 35, 'polynomialProblems', 5],
+  ['Complete 1 challenge problem', 8, 40, 'challengeProblems', 1],
+  ['Complete 3 challenge problems', 15, 75, 'challengeProblems', 3],
+  ['Practice for 10 minutes', 8, 40, 'practiceMinutes', 10],
+  ['Earn 100 XP today', 10, 50, 'xp', 100],
+  ['Complete practice in 2 different topics', 9, 45, 'topicCount', 2],
+  ['Complete 5 problems on the first attempt', 8, 40, 'firstAttemptProblems', 5],
+  ['Complete all 3 daily missions', 15, 75, 'dailyMissions', 3],
+]
+
+function todayKey() {
+  return new Date().toISOString().slice(0, 10)
+}
+
+function createDailyMissions() {
+  return [...DAILY_MISSION_DEFINITIONS]
+    .sort(() => Math.random() - 0.5)
+    .slice(0, 3)
+    .map(([title, tokens, xp, stat, target], index) => ({ id: index + 1, title, tokens, xp, progress: 0, target, stat, completed: false }))
+}
+
+const createStats = () => ({
+  practiceProblems: 0,
+  correctStreak: 0,
+  bestCorrectStreak: 0,
+  lessonsCompleted: 0,
+  noHintProblems: 0,
+  correctSteps: 0,
+  retrySolved: 0,
+  sessionsAt80: 0,
+  sessionsAt100: 0,
+  algebraProblems: 0,
+  pythagorasProblems: 0,
+  polynomialProblems: 0,
+  challengeProblems: 0,
+  practiceMinutes: 0,
+  firstAttemptProblems: 0,
+  topics: [],
+})
+
+const createMeta = () => ({
+  tokens: 25,
+  xp: 0,
+  stats: createStats(),
+  dailyDate: todayKey(),
+  missions: createDailyMissions(),
+})
+
 const catalog = {
   Algebra: ['Algebra Basics', 'Simplifying Expressions', 'Linear Equations', 'Simplifying Expressions', 'Distributive Property', 'Linear Equations', 'Multi-Step Equations', 'Inequalities', 'Ratios & Proportions', 'Systems of Equations', 'Exponents', 'Radicals', 'Quadratic Equations', 'Factoring', 'Completing the Square', 'Functions', 'Graphing Functions'],
   'Pythagoras & Geometry': ['Right Triangles', 'Pythagorean Theorem', 'Finding a Missing Side', 'Right Triangles', 'Pythagorean Theorem', 'Finding Missing Sides', 'Converse of the Pythagorean Theorem', 'Special Right Triangles', 'Distance on the Coordinate Plane', 'Applications of Pythagoras'],
   Polynomials: ['Polynomial Basics', 'Adding & Subtracting Polynomials', 'Multiplying Polynomials', 'Adding Polynomials', 'Subtracting Polynomials', 'Multiplying Monomials', 'Multiplying Polynomials', 'Special Products', 'Dividing Polynomials by Monomials', 'Polynomial Long Division', 'Factoring Polynomials', 'Factoring by GCF', 'Factoring by Grouping', 'Factoring Trinomials', 'Difference of Squares', 'Solving Polynomial Equations'],
 }
 
+/** Convert concise quiz data into the API shape consumed by the client. */
 const makeQuiz = (items) => items.map(([question, answer, options]) => {
   const answers = [...new Set([answer, ...options])].slice(0, 4)
+
   return {
     question,
     answer,
@@ -22,7 +85,15 @@ const makeQuiz = (items) => items.map(([question, answer, options]) => {
       : `Your answer: ${option}. Why it doesn't work: this question uses the same rule throughout; apply it carefully to get ${answer}.`]))
   }
 })
-const lesson = (title, intro, animation, components, steps, questions) => ({ title, intro, animation, components, steps, quiz: makeQuiz(questions) })
+/** Create a lesson while keeping the curriculum source concise and consistent. */
+const lesson = (title, intro, animation, components, steps, questions) => ({
+  title,
+  intro,
+  animation,
+  components,
+  steps,
+  quiz: makeQuiz(questions),
+})
 
 const lessons = {
   Algebra: [
@@ -42,11 +113,158 @@ const lessons = {
   ],
 }
 
-const loadProgress = () => { try { return JSON.parse(fs.readFileSync(progressFile, 'utf8')) } catch { return {} } }
-const saveProgress = progress => fs.writeFileSync(progressFile, JSON.stringify(progress, null, 2))
+const MAX_AVAILABLE_LESSONS = 3
+
+function loadProgress() {
+  try {
+    const progress = JSON.parse(fs.readFileSync(progressFile, 'utf8'))
+    const defaultMeta = createMeta()
+    const meta = progress.meta || defaultMeta
+    meta.stats = { ...createStats(), ...(meta.stats || {}) }
+    if (meta.dailyDate !== todayKey() || !Array.isArray(meta.missions) || meta.missions.length !== 3) {
+      meta.dailyDate = todayKey()
+      meta.missions = createDailyMissions()
+    }
+    return { ...progress, meta }
+  } catch {
+    // A learner without a saved file starts with no completed lessons.
+    return { meta: createMeta() }
+  }
+}
+
+function saveProgress(progress) {
+  fs.writeFileSync(progressFile, JSON.stringify(progress, null, 2))
+}
+
+function getCourseList(_request, response) {
+  const courses = Object.entries(catalog).map(([name, lessonNames]) => ({
+    name,
+    lessons: lessonNames,
+  }))
+
+  response.json(courses)
+}
+
+function getLesson(request, response) {
+  const courseLessons = lessons[request.params.course]
+  const lessonIndex = Number(request.params.lesson)
+  const requestedLesson = courseLessons?.[lessonIndex]
+
+  if (!requestedLesson) {
+    return response.status(404).json({
+      message: 'This lesson is locked or unavailable.',
+    })
+  }
+
+  return response.json(requestedLesson)
+}
+
+function getProgress(_request, response) {
+  response.json(loadProgress())
+}
+
+function spendTokens(cost, response) {
+  const progress = loadProgress()
+  const meta = progress.meta
+
+  if (meta.tokens < cost) {
+    return response.status(402).json({ message: `You need ${cost} tokens for this action.`, progress })
+  }
+
+  meta.tokens -= cost
+  saveProgress(progress)
+  return response.json({ progress, cost })
+}
+
+function spendHint(_request, response) {
+  return spendTokens(1, response)
+}
+
+function spendSkip(_request, response) {
+  return spendTokens(2, response)
+}
+
+function getMissionProgress(meta, stat) {
+  if (stat === 'correctStreak') return meta.stats.bestCorrectStreak
+  if (stat === 'topicCount') return meta.stats.topics.length
+  if (stat === 'dailyMissions') return meta.missions.filter(mission => mission.completed && mission.id <= 3).length
+  return meta.stats[stat] || 0
+}
+
+function recordActivity(request, response) {
+  const progress = loadProgress()
+  const meta = progress.meta
+  const startingTokens = meta.tokens
+  const startingXp = meta.xp
+  const activity = request.body || {}
+  const topic = activity.topic
+  const isPractice = activity.kind === 'practice'
+  const isLesson = activity.kind === 'lesson'
+
+  if (!isPractice && !isLesson) return response.status(400).json({ message: 'Activity kind must be practice or lesson.' })
+
+  if (isPractice) {
+    const accuracy = Math.max(0, Math.min(1, Number(activity.accuracy) || 0))
+    meta.tokens += 2
+    meta.xp += 10
+    meta.stats.practiceProblems += 1
+    meta.stats.correctSteps += Math.max(0, Number(activity.correctSteps) || 0)
+    meta.stats.correctStreak = activity.correct ? meta.stats.correctStreak + 1 : 0
+    meta.stats.bestCorrectStreak = Math.max(meta.stats.bestCorrectStreak, meta.stats.correctStreak)
+    if (!activity.usedHint) meta.stats.noHintProblems += 1
+    if (activity.retrySolved) meta.stats.retrySolved += 1
+    if (accuracy >= 0.8) meta.stats.sessionsAt80 += 1
+    if (accuracy === 1) meta.stats.sessionsAt100 += 1
+    if (activity.firstAttempt) meta.stats.firstAttemptProblems += 1
+    if (topic === 'Algebra') meta.stats.algebraProblems += 1
+    if (topic === 'Pythagoras') meta.stats.pythagorasProblems += 1
+    if (topic === 'Polynomials') meta.stats.polynomialProblems += 1
+    if (activity.challenge) meta.stats.challengeProblems += 1
+    meta.stats.practiceMinutes += Math.max(0, Number(activity.minutes) || 0)
+    if (topic && !meta.stats.topics.includes(topic)) meta.stats.topics.push(topic)
+  }
+
+  if (isLesson) {
+    meta.tokens += activity.repeat ? 3 : 5
+    meta.xp += activity.repeat ? 30 : 50
+    meta.stats.lessonsCompleted += 1
+  }
+
+  for (const mission of meta.missions) {
+    mission.progress = Math.min(mission.target, getMissionProgress(meta, mission.stat))
+    if (!mission.completed && mission.progress >= mission.target) {
+      mission.completed = true
+      meta.tokens += mission.tokens
+      meta.xp += mission.xp
+    }
+  }
+
+  saveProgress(progress)
+  response.json({ progress, activityReward: { tokens: meta.tokens - startingTokens, xp: meta.xp - startingXp } })
+}
+
+function updateProgress(request, response) {
+  const requestedCompletedCount = Number(request.body.completed) || 0
+  const completed = Math.max(
+    0,
+    Math.min(MAX_AVAILABLE_LESSONS, requestedCompletedCount),
+  )
+  const progress = loadProgress()
+
+  progress[request.params.course] = completed
+  saveProgress(progress)
+
+  response.json({ course: request.params.course, completed, progress })
+}
+
 app.use(express.json())
-app.get('/api/courses', (_req, res) => res.json(Object.entries(catalog).map(([name, lessonNames]) => ({ name, lessons: lessonNames }))))
-app.get('/api/courses/:course/lessons/:lesson', (req, res) => { const item = lessons[req.params.course]?.[Number(req.params.lesson)]; if (!item) return res.status(404).json({ message: 'This lesson is locked or unavailable.' }); res.json(item) })
-app.get('/api/progress', (_req, res) => res.json(loadProgress()))
-app.put('/api/progress/:course', (req, res) => { const count = Math.max(0, Math.min(3, Number(req.body.completed) || 0)); const progress = loadProgress(); progress[req.params.course] = count; saveProgress(progress); res.json({ course: req.params.course, completed: count }) })
+
+app.get('/api/courses', getCourseList)
+app.get('/api/courses/:course/lessons/:lesson', getLesson)
+app.get('/api/progress', getProgress)
+app.post('/api/hint', spendHint)
+app.post('/api/skip', spendSkip)
+app.put('/api/progress/:course', updateProgress)
+app.post('/api/activity', recordActivity)
+
 app.listen(port, () => console.log(`Math Mentor API listening on http://localhost:${port}`))
