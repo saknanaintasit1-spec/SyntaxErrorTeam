@@ -79,6 +79,23 @@ const MISSION_CATALOG = [
   ['Complete all 3 daily missions', 75, 15, 3],
 ]
 
+const SHOP_BOXES = {
+  frameBox: {
+    label: 'Frame Box',
+    icon: '▣',
+    cost: 10,
+    description: 'Give your profile a little more geometry.',
+    rewards: [['Simple', 'Common', 45], ['Notebook', 'Common', 30], ['Pencil', 'Common', 15], ['Blue Glow', 'Rare', 5], ['Purple Glow', 'Rare', 3], ['Golden', 'Epic', 1.5], ['Galaxy', 'Legendary', 0.5]],
+  },
+  titleBox: {
+    label: 'Title Box',
+    icon: '✦',
+    cost: 10,
+    description: 'Wear a title that shows how you learn.',
+    rewards: [['Number Learner', 'Common', 35], ['Equation Explorer', 'Common', 25], ['Math Student', 'Common', 20], ['Problem Solver', 'Rare', 8], ['Formula Finder', 'Rare', 5], ['Math Strategist', 'Epic', 5], ['Theorem Master', 'Epic', 1.5], ['Mathematical Legend', 'Legendary', 0.5]],
+  },
+}
+
 function getMissionFallback() {
   const day = new Date().toISOString().slice(0, 10)
   const seed = [...day].reduce((total, character) => total + character.charCodeAt(0), 0)
@@ -247,7 +264,7 @@ function MissionScreen({ wallet }) {
   return <section className="screen mission-screen">
     <header className="mission-header">
       <div><p>Total Daily Progress</p><div className="header-progress"><span style={{ width: `${missions.length ? (completedMissions / missions.length) * 100 : 0}%` }} /></div></div>
-      <strong>{completedMissions}/{missions.length}</strong>
+      <strong>{completedMissions}/{missions.length}</strong><span className="mission-time">Today’s focus</span>
     </header>
     <div className="mission-title-row"><div><h1>Daily Missions</h1><p className="wallet-xp">{wallet.xp || 0} XP earned</p></div><span className="coin-balance" aria-label={`${wallet.tokens || 0} tokens available`}>✦ {wallet.tokens || 0}</span></div>
     <div className="mission-list">{missions.map(mission => <MissionCard key={mission.id} mission={mission} />)}</div>
@@ -329,6 +346,62 @@ function PracticeHub({ onActivity, onHint, onSkip }) {
   return <section className="screen practice-hub"><header className="practice-hub-header"><p className="eyebrow">BUILD YOUR SKILLS</p><h1>Practice</h1><span>Choose a problem type and solve a fresh problem.</span></header><div className="practice-sections">{categories.map(([category, types]) => <section className={`practice-section practice-${category.toLowerCase().replace(' ', '-')}`} key={category}><header><span>{category === 'Algebra' ? '𝑥' : category === 'Pythagoras' ? '△' : '⌁'}</span><div><h2>{category}</h2><p>Choose a focus area</p></div></header><div className="practice-type-list">{types.map(([type, title, description]) => <button key={type} onClick={() => setSelection({ category, type })}><strong>{title}</strong><small>{description}</small><em>Start <span>→</span></em></button>)}</div></section>)}</div></section>
 }
 
+function ShopScreen({ wallet, onPurchase, onBoost }) {
+  const [clock, setClock] = useState(Date.now())
+  const [opening, setOpening] = useState(null)
+  const [reward, setReward] = useState(null)
+  const boostSeconds = wallet.xpBoostUntil ? Math.max(0, Math.ceil((wallet.xpBoostUntil - clock) / 1000)) : 0
+  const boostMinutes = Math.ceil(boostSeconds / 60)
+  const ownedFrames = wallet.collection?.frames || []
+  const ownedTitles = wallet.collection?.titles || []
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  async function openBox(id) {
+    setReward(null)
+    setOpening(id)
+    const result = await onPurchase(id)
+    window.setTimeout(() => {
+      setOpening(null)
+      if (result?.reward) setReward(result)
+    }, 900)
+  }
+
+  function formatBoostTime(seconds) {
+    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+  }
+
+  return <section className="screen shop-screen">
+    <header className="shop-header"><div><p className="eyebrow">CUSTOMIZE YOUR PROFILE</p><h1>Math Shop</h1><span>Spend tokens on frames, titles, and focused XP time.</span></div><strong>✦ {wallet.tokens || 0}</strong></header>
+    <div className="shop-grid">{Object.entries(SHOP_BOXES).map(([id, box]) => <article className={`shop-box ${id} ${opening === id ? 'opening' : ''}`} key={id}><div className="shop-box-art"><span>{box.icon}</span><i>{id === 'frameBox' ? 'a + b' : 'x² + y²'}</i>{opening === id && <b className="box-opening-label">Opening...</b>}</div><div className="shop-box-copy"><p className="eyebrow">MYSTERY BOX</p><h2>{box.label}</h2><p>{box.description}</p><button onClick={() => openBox(id)} disabled={opening !== null || (wallet.tokens || 0) < box.cost}>Open for {box.cost} tokens <span>→</span></button></div><div className="drop-table">{box.rewards.map(([name, rarity, rate]) => <div className={rarity.toLowerCase()} key={name}><span>{name}</span><strong>{rate}%</strong></div>)}</div></article>)}</div>
+    <section className={`boost-card ${boostSeconds > 0 ? 'boost-active' : ''}`}><div><p className="eyebrow">{boostSeconds > 0 ? 'BOOST ACTIVE' : 'LIMITED BOOST'}</p><h2>XP surge</h2><p>{boostSeconds > 0 ? `${formatBoostTime(boostSeconds)} remaining at 2× XP.` : 'Double your XP earnings for the next 30 minutes.'}</p></div><button onClick={onBoost} disabled={boostSeconds > 0 || (wallet.tokens || 0) < 30}>{boostSeconds > 0 ? `${formatBoostTime(boostSeconds)} active` : '2× XP · 30 tokens'}</button></section>
+    <section className="collection-strip"><div><p className="eyebrow">YOUR COLLECTION</p><h2>{wallet.activeTitle || 'Number Learner'}</h2><span>{ownedFrames.length} frames · {ownedTitles.length} titles discovered</span></div><div className={`collection-frame ${String(wallet.activeFrame || 'Simple').toLowerCase().replace(' ', '-')}`}><span>{wallet.activeFrame || 'Simple'}</span></div></section>
+    {reward && <div className="shop-reveal"><button className="shop-reveal-close" onClick={() => setReward(null)} aria-label="Close reward">×</button><span className="reveal-spark">✦</span><p className="eyebrow">{reward.isNew ? 'ADDED TO PROFILES' : 'ALREADY OWNED'}</p><h2>{reward.reward.name}</h2><strong>{reward.reward.rarity}</strong><p>{reward.isNew ? 'You can equip this reward in Settings.' : 'Open another box to discover something new.'}</p></div>}
+  </section>
+}
+
+function SettingsScreen({ wallet, onSaveProfile }) {
+  const [profileName, setProfileName] = useState(wallet.profileName || 'Math Learner')
+  const [activeFrame, setActiveFrame] = useState(wallet.activeFrame || 'Simple')
+  const [activeTitle, setActiveTitle] = useState(wallet.activeTitle || 'Number Learner')
+  const frames = ['Simple', ...(wallet.collection?.frames || [])].filter((item, index, list) => list.indexOf(item) === index)
+  const titles = ['Number Learner', ...(wallet.collection?.titles || [])].filter((item, index, list) => list.indexOf(item) === index)
+
+  return <section className="screen settings-screen">
+    <header className="settings-header"><p className="eyebrow">YOUR IDENTITY</p><h1>Profile settings</h1><span>Choose how you appear while you learn.</span></header>
+    <form className="profile-editor" onSubmit={event => { event.preventDefault(); onSaveProfile({ profileName, activeFrame, activeTitle }) }}>
+      <div className={`profile-preview ${activeFrame.toLowerCase().replace(' ', '-')}`}><span className="profile-avatar">{profileName.slice(0, 1).toUpperCase()}</span><div><strong>{profileName}</strong><small>{activeTitle}</small></div></div>
+      <label>Display name<input maxLength="24" value={profileName} onChange={event => setProfileName(event.target.value)} /></label>
+      <fieldset><legend>Profile frame</legend><div className="profile-options">{frames.map(frame => <button type="button" className={activeFrame === frame ? 'selected' : ''} key={frame} onClick={() => setActiveFrame(frame)}><span className={`option-frame ${frame.toLowerCase().replace(' ', '-')}`} /><strong>{frame}</strong>{activeFrame === frame && <em>Equipped</em>}</button>)}</div></fieldset>
+      <fieldset><legend>Profile title</legend><div className="title-options">{titles.map(title => <button type="button" className={activeTitle === title ? 'selected' : ''} key={title} onClick={() => setActiveTitle(title)}><strong>{title}</strong>{activeTitle === title && <em>Equipped</em>}</button>)}</div></fieldset>
+      <button className="save-profile" type="submit">Save profile <span>→</span></button>
+    </form>
+  </section>
+}
+
 function PlaceholderScreen({ tab, coins }) {
   return <section className="screen placeholder-screen">
     <span className="placeholder-icon">{tab.icon}</span>
@@ -343,6 +416,32 @@ function TabBar({ activeTab, onChange }) {
   return <nav className="tab-bar" aria-label="Main navigation">
     {TABS.map(tab => <button aria-current={tab.id === activeTab ? 'page' : undefined} className={tab.id === activeTab ? 'active' : ''} key={tab.id} onClick={() => onChange(tab.id)}><span>{tab.icon}</span>{tab.label}</button>)}
   </nav>
+}
+
+function StatusRail({ wallet, course, onMission, onJourney }) {
+  const [clock, setClock] = useState(Date.now())
+  const progression = getLevelProgress(wallet.xp || 0)
+  const missions = wallet.missions?.length ? wallet.missions : getMissionFallback()
+  const completedMissions = missions.filter(mission => mission.completed).length
+  const boostSeconds = wallet.xpBoostUntil ? Math.max(0, Math.ceil((wallet.xpBoostUntil - clock) / 1000)) : 0
+  const journeyMeta = COURSE_META[course] || ['⌂', 'blue', 'Choose a learning path']
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(Date.now()), 1000)
+    return () => window.clearInterval(timer)
+  }, [])
+
+  return <aside className="status-rail">
+    <div className="rail-topline"><button className="rail-journey" onClick={onJourney}><span className={`rail-journey-icon ${journeyMeta[1]}`}>{journeyMeta[0]}</span><div><p>ACTIVE JOURNEY</p><strong>{course || 'Choose a journey'}</strong></div><b>→</b></button><div className="rail-wallet"><span>✦</span><strong>{wallet.tokens || 0}</strong></div></div>
+    <section className="rail-level"><div className="rail-level-heading"><span className="level-hud-badge">{progression.level}</span><div><p>LEVEL {progression.level}</p><strong>{progression.rank}</strong></div></div><div className="rail-xp-label"><span>{wallet.xp || 0} XP</span><span>{progression.level === 100 ? 'MAX' : `${Math.max(0, progression.nextLevelXp - (wallet.xp || 0))} XP to go`}</span></div><div className="level-xp-track"><span style={{ width: `${progression.percent}%` }} /></div></section>
+    <section className="rail-promo"><div><h2>Keep learning</h2><p>Build your streak with one more focused practice session.</p></div><span>✦</span><button onClick={() => onMission()}>VIEW MISSIONS</button></section>
+    <section className={`rail-boost ${boostSeconds > 0 ? 'active' : ''}`}><span>2×</span><div><p>{boostSeconds > 0 ? 'XP SURGE ACTIVE' : 'XP SURGE'}</p><strong>{boostSeconds > 0 ? `${Math.floor(boostSeconds / 60)}:${String(boostSeconds % 60).padStart(2, '0')} remaining` : 'Visit Shop to activate'}</strong></div></section>
+    <section className="rail-missions"><div className="rail-section-heading"><div><p>DAILY MISSIONS</p><strong>{completedMissions}/{missions.length} complete</strong></div><button onClick={onMission}>View</button></div>{missions.map(mission => <div className="rail-mission-item" key={mission.id}><span>{mission.title}</span><div className="rail-mission-track"><i style={{ width: `${Math.min(100, (mission.progress / mission.target) * 100)}%` }} /></div><small>{mission.progress}/{mission.target}</small></div>)}</section>
+  </aside>
+}
+
+function AppFrame({ children, activeTab, onChange, wallet, course, onMission, onJourney }) {
+  return <main className="app-frame"><TabBar activeTab={activeTab} onChange={onChange} /><section className="app-center">{children}</section><StatusRail wallet={wallet} course={course} onMission={onMission} onJourney={onJourney} /></main>
 }
 
 function RightTriangle({ legA = 3, legB = 4, hypotenuse = 5, missing = false, orientation = 0 }) {
@@ -594,6 +693,46 @@ function App() {
     return { ok: true }
   }
 
+  async function purchaseShopItem(item) {
+    const response = await fetch('/api/shop/purchase', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item }) })
+    const result = await response.json()
+    if (!response.ok) {
+      setWalletNotice(result.message || 'You do not have enough tokens.')
+      window.setTimeout(() => setWalletNotice(null), 2200)
+      return null
+    }
+    setProgress(result.progress)
+    setWalletNotice(result.isNew ? `${result.reward.name} ${result.reward.rarity} added to Profiles` : `${result.reward.name} ${result.reward.rarity} already in Profiles`)
+    window.setTimeout(() => setWalletNotice(null), 2800)
+    return result
+  }
+
+  async function purchaseXpSurge() {
+    const response = await fetch('/api/shop/xp-surge', { method: 'POST' })
+    const result = await response.json()
+    if (!response.ok) {
+      setWalletNotice(result.message || 'You do not have enough tokens.')
+      window.setTimeout(() => setWalletNotice(null), 2200)
+      return
+    }
+    setProgress(result.progress)
+    setWalletNotice('2× XP active for 30 minutes')
+    window.setTimeout(() => setWalletNotice(null), 2800)
+  }
+
+  async function saveProfile(profile) {
+    const response = await fetch('/api/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profile) })
+    const result = await response.json()
+    if (!response.ok) {
+      setWalletNotice(result.message || 'Profile could not be saved.')
+      window.setTimeout(() => setWalletNotice(null), 2200)
+      return
+    }
+    setProgress(result.progress)
+    setWalletNotice('Profile saved')
+    window.setTimeout(() => setWalletNotice(null), 2200)
+  }
+
   function selectNode(index) {
     const isAvailable = index <= completed && index < AVAILABLE_LESSON_COUNT
 
@@ -634,11 +773,14 @@ function App() {
 
   if (lessonData) return <LessonPage course={course} index={lessonData.index} data={lessonData.data} close={() => setLessonData(null)} complete={complete} onHint={spendHint} onSkip={spendSkip} />
   const activeTabDetails = TABS.find(tab => tab.id === activeTab)
-  if (activeTab === 'mission') return <main className="app-shell"><LevelHud wallet={wallet} /><MissionScreen wallet={wallet} /><TabBar activeTab={activeTab} onChange={setActiveTab} />{walletNotice && <div className="wallet-notice">{walletNotice}</div>}</main>
-  if (activeTab === 'practice') return <main className="app-shell"><LevelHud wallet={wallet} /><PracticeHub onActivity={recordActivity} onHint={spendHint} onSkip={spendSkip} /><TabBar activeTab={activeTab} onChange={setActiveTab} />{walletNotice && <div className="wallet-notice">{walletNotice}</div>}</main>
-  if (activeTab !== 'journey') return <main className="app-shell"><LevelHud wallet={wallet} /><PlaceholderScreen coins={wallet.tokens} tab={activeTabDetails} /><TabBar activeTab={activeTab} onChange={setActiveTab} />{walletNotice && <div className="wallet-notice">{walletNotice}</div>}</main>
-  if (!course) return <main className="page-shell"><LevelHud wallet={wallet} /><section className="course-picker"><header className="picker-header"><p>WELCOME TO</p><h1>Math Mentor</h1><span>Choose a learning path to begin your journey.</span></header>{error && <p className="api-error">{error}</p>}<div className="course-list">{courses.map(item => <button key={item.name} className={`course-option ${COURSE_META[item.name][1]}`} onClick={() => setCourse(item.name)}><i>{COURSE_META[item.name][0]}</i><span><b>{item.name}</b><small>{COURSE_META[item.name][2]}</small><em>{progress[item.name] || 0}/3 complete · {item.lessons.length} lessons →</em></span></button>)}</div></section><TabBar activeTab={activeTab} onChange={setActiveTab} />{walletNotice && <div className="wallet-notice">{walletNotice}</div>}</main>
+  const onJourney = () => { setCourse(null); setActiveTab('journey') }
+  if (activeTab === 'mission') return <AppFrame activeTab={activeTab} onChange={setActiveTab} wallet={wallet} course={course} onMission={() => setActiveTab('mission')} onJourney={onJourney}><MissionScreen wallet={wallet} />{walletNotice && <div className="wallet-notice">{walletNotice}</div>}</AppFrame>
+  if (activeTab === 'practice') return <AppFrame activeTab={activeTab} onChange={setActiveTab} wallet={wallet} course={course} onMission={() => setActiveTab('mission')} onJourney={onJourney}><PracticeHub onActivity={recordActivity} onHint={spendHint} onSkip={spendSkip} />{walletNotice && <div className="wallet-notice">{walletNotice}</div>}</AppFrame>
+  if (activeTab === 'shop') return <AppFrame activeTab={activeTab} onChange={setActiveTab} wallet={wallet} course={course} onMission={() => setActiveTab('mission')} onJourney={onJourney}><ShopScreen wallet={wallet} onPurchase={purchaseShopItem} onBoost={purchaseXpSurge} />{walletNotice && <div className="wallet-notice">{walletNotice}</div>}</AppFrame>
+  if (activeTab === 'settings') return <AppFrame activeTab={activeTab} onChange={setActiveTab} wallet={wallet} course={course} onMission={() => setActiveTab('mission')} onJourney={onJourney}><SettingsScreen wallet={wallet} onSaveProfile={saveProfile} />{walletNotice && <div className="wallet-notice">{walletNotice}</div>}</AppFrame>
+  if (activeTab !== 'journey') return <AppFrame activeTab={activeTab} onChange={setActiveTab} wallet={wallet} course={course} onMission={() => setActiveTab('mission')} onJourney={onJourney}><PlaceholderScreen coins={wallet.tokens} tab={activeTabDetails} />{walletNotice && <div className="wallet-notice">{walletNotice}</div>}</AppFrame>
+  if (!course) return <AppFrame activeTab={activeTab} onChange={setActiveTab} wallet={wallet} course={course} onMission={() => setActiveTab('mission')} onJourney={onJourney}><section className="course-picker compact-course-picker"><header className="picker-header"><p>WELCOME TO</p><h1>Choose a journey</h1><span>Pick a learning path to continue.</span></header>{error && <p className="api-error">{error}</p>}<div className="course-list">{courses.map(item => <button key={item.name} className={`course-option ${COURSE_META[item.name][1]}`} onClick={() => setCourse(item.name)}><i>{COURSE_META[item.name][0]}</i><span><b>{item.name}</b><small>{COURSE_META[item.name][2]}</small><em>{progress[item.name] || 0}/3 complete · {item.lessons.length} lessons →</em></span></button>)}</div></section>{walletNotice && <div className="wallet-notice">{walletNotice}</div>}</AppFrame>
   const lessons = selected?.lessons || []
-  return <main className="page-shell"><LevelHud wallet={wallet} /><section className="journey-screen"><header className="journey-header"><button className="back" onClick={() => setCourse(null)}>‹</button><div><p>YOUR JOURNEY</p><h1>{course}</h1></div><span className="flame">♨ {completed}</span></header><section className="chapter-card"><p>COURSE PROGRESS</p><h2>{completed} / 3</h2><div className="progress"><i style={{ width: `${(completed / 3) * 100}%` }} /></div><span>Finish each quiz to unlock the next lesson.</span></section><section className="path-intro"><h2>Learning path</h2><p>Complete the first three lessons. Later lessons are locked.</p></section>{error && <p className="api-error">{error}</p>}<section className="lesson-path">{lessons.map((title, index) => { const available = index <= completed && index < 3; const done = index < completed; return <div className={`path-row ${index % 2 ? 'right' : 'left'}`} key={`${title}-${index}`}><span className="path-connector" /><button className={`lesson-node ${done ? 'complete' : available ? 'next' : 'locked'}`} onClick={() => selectNode(index)}>{done ? '✓' : available ? '▶' : '🔒'}</button><button className="lesson-label" disabled={!available} onClick={() => selectNode(index)}><small>LESSON {index + 1}</small><b>{title}</b>{!available && <em>Locked</em>}</button></div> })}</section>{notice !== null && <div className="start-notice"><button className="close" onClick={() => setNotice(null)}>×</button><span>LESSON {notice + 1}</span><h2>{lessons[notice]}</h2><p>Ready to begin? This lesson includes an animation and eight quiz questions.</p><button className="start-button" onClick={startLesson}>START LESSON →</button></div>}</section>{walletNotice && <div className="wallet-notice">{walletNotice}</div>}</main>
+  return <AppFrame activeTab={activeTab} onChange={setActiveTab} wallet={wallet} course={course} onMission={() => setActiveTab('mission')} onJourney={onJourney}><section className="journey-screen"><header className="journey-header"><button className="back" onClick={() => setCourse(null)}>‹</button><div><p>YOUR JOURNEY</p><h1>{course}</h1></div><span className="flame">♨ {completed}</span></header><section className="chapter-card"><p>COURSE PROGRESS</p><h2>{completed} / 3</h2><div className="progress"><i style={{ width: `${(completed / 3) * 100}%` }} /></div><span>Finish each quiz to unlock the next lesson.</span></section><section className="path-intro"><h2>Learning path</h2><p>Complete the first three lessons. Later lessons are locked.</p></section>{error && <p className="api-error">{error}</p>}<section className="lesson-path">{lessons.map((title, index) => { const available = index <= completed && index < 3; const done = index < completed; return <div className={`path-row ${index % 2 ? 'right' : 'left'}`} key={`${title}-${index}`}><span className="path-connector" /><button className={`lesson-node ${done ? 'complete' : available ? 'next' : 'locked'}`} onClick={() => selectNode(index)}>{done ? '✓' : available ? '▶' : '🔒'}</button><button className="lesson-label" disabled={!available} onClick={() => selectNode(index)}><small>LESSON {index + 1}</small><b>{title}</b>{!available && <em>Locked</em>}</button></div> })}</section>{notice !== null && <div className="start-notice"><button className="close" onClick={() => setNotice(null)}>×</button><span>LESSON {notice + 1}</span><h2>{lessons[notice]}</h2><p>Ready to begin? This lesson includes an animation and eight quiz questions.</p><button className="start-button" onClick={startLesson}>START LESSON →</button></div>}</section>{walletNotice && <div className="wallet-notice">{walletNotice}</div>}</AppFrame>
 }
 export default App

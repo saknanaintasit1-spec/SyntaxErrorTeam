@@ -3,60 +3,84 @@
   "Polynomials": 3,
   "Pythagoras & Geometry": 3,
   "meta": {
-    "tokens": 0,
-    "xp": 20,
+    "tokens": 9140,
+    "xp": 160,
     "stats": {
-      "practiceProblems": 2,
+      "practiceProblems": 6,
       "correctStreak": 2,
-      "bestCorrectStreak": 2,
-      "lessonsCompleted": 0,
-      "noHintProblems": 0,
-      "correctSteps": 8,
+      "bestCorrectStreak": 3,
+      "lessonsCompleted": 1,
+      "noHintProblems": 4,
+      "correctSteps": 16,
       "retrySolved": 0,
-      "sessionsAt80": 2,
-      "sessionsAt100": 2,
+      "sessionsAt80": 6,
+      "sessionsAt100": 5,
       "algebraProblems": 0,
-      "pythagorasProblems": 0,
+      "pythagorasProblems": 4,
       "polynomialProblems": 2,
       "challengeProblems": 0,
       "practiceMinutes": 0,
-      "firstAttemptProblems": 0,
+      "firstAttemptProblems": 3,
       "topics": [
-        "Polynomials"
+        "Polynomials",
+        "Pythagoras"
       ]
     },
-    "dailyDate": "2026-09-04",
+    "dailyDate": "2026-09-05",
     "missions": [
       {
         "id": 1,
-        "title": "Complete 10 practice problems",
-        "tokens": 10,
-        "xp": 50,
-        "progress": 2,
-        "target": 10,
-        "stat": "practiceProblems",
+        "title": "Retry and solve 3 previously missed questions",
+        "tokens": 8,
+        "xp": 40,
+        "progress": 0,
+        "target": 3,
+        "stat": "retrySolved",
         "completed": false
       },
       {
         "id": 2,
-        "title": "Solve 5 algebra problems",
-        "tokens": 7,
-        "xp": 35,
-        "progress": 0,
-        "target": 5,
-        "stat": "algebraProblems",
-        "completed": false
+        "title": "Complete practice in 2 different topics",
+        "tokens": 9,
+        "xp": 45,
+        "progress": 2,
+        "target": 2,
+        "stat": "topicCount",
+        "completed": true
       },
       {
         "id": 3,
-        "title": "Complete 1 challenge problem",
-        "tokens": 8,
-        "xp": 40,
-        "progress": 0,
-        "target": 1,
-        "stat": "challengeProblems",
-        "completed": false
+        "title": "Complete 5 practice problems",
+        "tokens": 5,
+        "xp": 25,
+        "progress": 5,
+        "target": 5,
+        "stat": "practiceProblems",
+        "completed": true
       }
-    ]
+    ],
+    "profileName": "Math Learner",
+    "collection": {
+      "frames": [
+        "Notebook",
+        "Simple",
+        "Purple Glow",
+        "Blue Glow",
+        "Pencil"
+      ],
+      "titles": [
+        "Problem Solver",
+        "Equation Explorer",
+        "Number Learner",
+        "Math Student",
+        "Math Strategist",
+        "Theorem Master",
+        "Formula Finder",
+        "Mathematical Legend"
+      ]
+    },
+    "activeFrame": "Simple",
+    "activeTitle": "Number Learner",
+    "xpBoostUntil": 1788632187720
   }
 }

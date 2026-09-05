@@ -28,6 +28,23 @@ const DAILY_MISSION_DEFINITIONS = [
   ['Complete all 3 daily missions', 15, 75, 'dailyMissions', 3],
 ]
 
+const SHOP_ITEMS = {
+  frameBox: {
+    cost: 10,
+    rewards: [
+      ['Simple', 'Common', 45], ['Notebook', 'Common', 30], ['Pencil', 'Common', 15],
+      ['Blue Glow', 'Rare', 5], ['Purple Glow', 'Rare', 3], ['Golden', 'Epic', 1.5], ['Galaxy', 'Legendary', 0.5],
+    ],
+  },
+  titleBox: {
+    cost: 10,
+    rewards: [
+      ['Number Learner', 'Common', 35], ['Equation Explorer', 'Common', 25], ['Math Student', 'Common', 20],
+      ['Problem Solver', 'Rare', 8], ['Formula Finder', 'Rare', 5], ['Math Strategist', 'Epic', 5], ['Theorem Master', 'Epic', 1.5], ['Mathematical Legend', 'Legendary', 0.5],
+    ],
+  },
+}
+
 function todayKey() {
   return new Date().toISOString().slice(0, 10)
 }
@@ -61,6 +78,11 @@ const createStats = () => ({
 const createMeta = () => ({
   tokens: 25,
   xp: 0,
+  profileName: 'Math Learner',
+  collection: { frames: [], titles: [] },
+  activeFrame: 'Simple',
+  activeTitle: 'Number Learner',
+  xpBoostUntil: 0,
   stats: createStats(),
   dailyDate: todayKey(),
   missions: createDailyMissions(),
@@ -120,6 +142,13 @@ function loadProgress() {
     const progress = JSON.parse(fs.readFileSync(progressFile, 'utf8'))
     const defaultMeta = createMeta()
     const meta = progress.meta || defaultMeta
+    meta.profileName ||= defaultMeta.profileName
+    meta.collection = { ...defaultMeta.collection, ...(meta.collection || {}) }
+    meta.collection.frames ||= []
+    meta.collection.titles ||= []
+    meta.activeFrame ||= defaultMeta.activeFrame
+    meta.activeTitle ||= defaultMeta.activeTitle
+    meta.xpBoostUntil ||= 0
     meta.stats = { ...createStats(), ...(meta.stats || {}) }
     if (meta.dailyDate !== todayKey() || !Array.isArray(meta.missions) || meta.missions.length !== 3) {
       meta.dailyDate = todayKey()
@@ -184,6 +213,59 @@ function spendSkip(_request, response) {
   return spendTokens(2, response)
 }
 
+function drawReward(rewards) {
+  const roll = Math.random() * 100
+  let total = 0
+  for (const [name, rarity, rate] of rewards) {
+    total += rate
+    if (roll < total) return { name, rarity }
+  }
+  const [name, rarity] = rewards[rewards.length - 1]
+  return { name, rarity }
+}
+
+function purchaseShopItem(request, response) {
+  const item = SHOP_ITEMS[request.body?.item]
+  if (!item) return response.status(400).json({ message: 'That shop item does not exist.' })
+  const progress = loadProgress()
+  if (progress.meta.tokens < item.cost) return response.status(402).json({ message: `You need ${item.cost} tokens for this item.`, progress })
+  const reward = drawReward(item.rewards)
+  const collectionKey = request.body.item === 'frameBox' ? 'frames' : 'titles'
+  const isNew = !progress.meta.collection[collectionKey].includes(reward.name)
+  progress.meta.tokens -= item.cost
+  if (isNew) progress.meta.collection[collectionKey].push(reward.name)
+  saveProgress(progress)
+  return response.json({ progress, reward, isNew })
+}
+
+function purchaseXpSurge(_request, response) {
+  const progress = loadProgress()
+  if (progress.meta.tokens < 30) return response.status(402).json({ message: 'You need 30 tokens for the XP surge.', progress })
+  progress.meta.tokens -= 30
+  progress.meta.xpBoostUntil = Date.now() + 30 * 60 * 1000
+  saveProgress(progress)
+  return response.json({ progress })
+}
+
+function updateProfile(request, response) {
+  const progress = loadProgress()
+  const meta = progress.meta
+  const profileName = String(request.body?.profileName || '').trim().slice(0, 24)
+  const frame = String(request.body?.activeFrame || '')
+  const title = String(request.body?.activeTitle || '')
+  const ownedFrames = ['Simple', ...(meta.collection.frames || [])]
+  const ownedTitles = ['Number Learner', ...(meta.collection.titles || [])]
+
+  if (!profileName) return response.status(400).json({ message: 'Profile name cannot be empty.' })
+  if (!ownedFrames.includes(frame) || !ownedTitles.includes(title)) return response.status(403).json({ message: 'That profile item has not been unlocked.', progress })
+
+  meta.profileName = profileName
+  meta.activeFrame = frame
+  meta.activeTitle = title
+  saveProgress(progress)
+  return response.json({ progress })
+}
+
 function getMissionProgress(meta, stat) {
   if (stat === 'correctStreak') return meta.stats.bestCorrectStreak
   if (stat === 'topicCount') return meta.stats.topics.length
@@ -196,6 +278,7 @@ function recordActivity(request, response) {
   const meta = progress.meta
   const startingTokens = meta.tokens
   const startingXp = meta.xp
+  const xpMultiplier = meta.xpBoostUntil > Date.now() ? 2 : 1
   const activity = request.body || {}
   const topic = activity.topic
   const isPractice = activity.kind === 'practice'
@@ -206,7 +289,7 @@ function recordActivity(request, response) {
   if (isPractice) {
     const accuracy = Math.max(0, Math.min(1, Number(activity.accuracy) || 0))
     meta.tokens += 2
-    meta.xp += 10
+    meta.xp += 10 * xpMultiplier
     meta.stats.practiceProblems += 1
     meta.stats.correctSteps += Math.max(0, Number(activity.correctSteps) || 0)
     meta.stats.correctStreak = activity.correct ? meta.stats.correctStreak + 1 : 0
@@ -226,7 +309,7 @@ function recordActivity(request, response) {
 
   if (isLesson) {
     meta.tokens += activity.repeat ? 3 : 5
-    meta.xp += activity.repeat ? 30 : 50
+    meta.xp += (activity.repeat ? 30 : 50) * xpMultiplier
     meta.stats.lessonsCompleted += 1
   }
 
@@ -235,7 +318,7 @@ function recordActivity(request, response) {
     if (!mission.completed && mission.progress >= mission.target) {
       mission.completed = true
       meta.tokens += mission.tokens
-      meta.xp += mission.xp
+      meta.xp += mission.xp * xpMultiplier
     }
   }
 
@@ -264,6 +347,9 @@ app.get('/api/courses/:course/lessons/:lesson', getLesson)
 app.get('/api/progress', getProgress)
 app.post('/api/hint', spendHint)
 app.post('/api/skip', spendSkip)
+app.post('/api/shop/purchase', purchaseShopItem)
+app.post('/api/shop/xp-surge', purchaseXpSurge)
+app.put('/api/profile', updateProfile)
 app.put('/api/progress/:course', updateProgress)
 app.post('/api/activity', recordActivity)
 
