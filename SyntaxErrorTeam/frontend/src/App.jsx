@@ -2,6 +2,14 @@ import { useEffect, useState } from 'react'
 import './App.css'
 import './mission.css'
 import './quiz.css'
+import { createUserWithEmailAndPassword, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'firebase/auth'
+import { firebaseAuth, firebaseEnabled } from './firebase'
+
+async function apiFetch(url, options = {}) {
+  const headers = new Headers(options.headers || {})
+  if (firebaseEnabled && firebaseAuth?.currentUser) headers.set('Authorization', `Bearer ${await firebaseAuth.currentUser.getIdToken()}`)
+  return fetch(url, { ...options, headers })
+}
 
 const COURSE_META = {
   Algebra: ['𝑥', 'blue', 'Build your equation skills'],
@@ -95,6 +103,16 @@ const SHOP_BOXES = {
     rewards: [['Number Learner', 'Common', 35], ['Equation Explorer', 'Common', 25], ['Math Student', 'Common', 20], ['Problem Solver', 'Rare', 8], ['Formula Finder', 'Rare', 5], ['Math Strategist', 'Epic', 5], ['Theorem Master', 'Epic', 1.5], ['Mathematical Legend', 'Legendary', 0.5]],
   },
 }
+
+const MOTIVATION_QUOTES = [
+  ['Just because we can’t find a solution, it doesn’t mean there isn’t one.', 'Andrew Wiles'],
+  ['It is not enough to have a good mind; the main thing is to use it well.', 'René Descartes'],
+  ['One of the most amazing things about mathematics is the people who do it aren’t usually interested in application, because the mathematics itself is so beautiful.', 'Andrew Wiles'],
+  ['There should be no element of slavery in a learning program. Compulsory exercise will never remain in the mind, but education given by compelling interest will.', 'Plato'],
+  ['The important thing to remember about mathematics is not to be frightened.', 'Richard Dawkins'],
+  ['God used beautiful mathematics in creating the world.', 'Paul Dirac'],
+  ['Errors are not failures. They are the scaffolding that lets you climb to the solution.', 'Sam Vandervelde'],
+]
 
 function getMissionFallback() {
   const day = new Date().toISOString().slice(0, 10)
@@ -258,6 +276,7 @@ function MissionCard({ mission }) {
 }
 
 function MissionScreen({ wallet }) {
+  const [quote] = useState(() => MOTIVATION_QUOTES[Math.floor(Math.random() * MOTIVATION_QUOTES.length)])
   const missions = wallet.missions?.length ? wallet.missions : getMissionFallback()
   const completedMissions = missions.filter(mission => mission.completed).length
 
@@ -268,6 +287,7 @@ function MissionScreen({ wallet }) {
     </header>
     <div className="mission-title-row"><div><h1>Daily Missions</h1><p className="wallet-xp">{wallet.xp || 0} XP earned</p></div><span className="coin-balance" aria-label={`${wallet.tokens || 0} tokens available`}>✦ {wallet.tokens || 0}</span></div>
     <div className="mission-list">{missions.map(mission => <MissionCard key={mission.id} mission={mission} />)}</div>
+    <blockquote className="mission-quote"><p>“{quote[0]}”</p><cite>— {quote[1]}</cite></blockquote>
   </section>
 }
 
@@ -383,23 +403,54 @@ function ShopScreen({ wallet, onPurchase, onBoost }) {
   </section>
 }
 
-function SettingsScreen({ wallet, onSaveProfile }) {
+function SettingsScreen({ wallet, onSaveProfile, onLogout }) {
+  const [section, setSection] = useState('profile')
   const [profileName, setProfileName] = useState(wallet.profileName || 'Math Learner')
   const [activeFrame, setActiveFrame] = useState(wallet.activeFrame || 'Simple')
   const [activeTitle, setActiveTitle] = useState(wallet.activeTitle || 'Number Learner')
   const frames = ['Simple', ...(wallet.collection?.frames || [])].filter((item, index, list) => list.indexOf(item) === index)
   const titles = ['Number Learner', ...(wallet.collection?.titles || [])].filter((item, index, list) => list.indexOf(item) === index)
+  const progression = getLevelProgress(wallet.xp || 0)
 
   return <section className="screen settings-screen">
-    <header className="settings-header"><p className="eyebrow">YOUR IDENTITY</p><h1>Profile settings</h1><span>Choose how you appear while you learn.</span></header>
-    <form className="profile-editor" onSubmit={event => { event.preventDefault(); onSaveProfile({ profileName, activeFrame, activeTitle }) }}>
-      <div className={`profile-preview ${activeFrame.toLowerCase().replace(' ', '-')}`}><span className="profile-avatar">{profileName.slice(0, 1).toUpperCase()}</span><div><strong>{profileName}</strong><small>{activeTitle}</small></div></div>
-      <label>Display name<input maxLength="24" value={profileName} onChange={event => setProfileName(event.target.value)} /></label>
-      <fieldset><legend>Profile frame</legend><div className="profile-options">{frames.map(frame => <button type="button" className={activeFrame === frame ? 'selected' : ''} key={frame} onClick={() => setActiveFrame(frame)}><span className={`option-frame ${frame.toLowerCase().replace(' ', '-')}`} /><strong>{frame}</strong>{activeFrame === frame && <em>Equipped</em>}</button>)}</div></fieldset>
-      <fieldset><legend>Profile title</legend><div className="title-options">{titles.map(title => <button type="button" className={activeTitle === title ? 'selected' : ''} key={title} onClick={() => setActiveTitle(title)}><strong>{title}</strong>{activeTitle === title && <em>Equipped</em>}</button>)}</div></fieldset>
-      <button className="save-profile" type="submit">Save profile <span>→</span></button>
-    </form>
+    <header className="settings-header"><div><p className="eyebrow">ACCOUNT & APP</p><h1>Settings</h1><span>Manage your profile, collection, preferences, and progress.</span></div><button className="logout-button" onClick={onLogout}>Log out</button></header>
+    <nav className="settings-sections" aria-label="Settings sections">{[['profile', 'Edit profile'], ['collection', 'Collections'], ['preferences', 'Preferences'], ['progress', 'Progress']].map(([id, label]) => <button className={section === id ? 'active' : ''} key={id} onClick={() => setSection(id)}>{label}</button>)}</nav>
+    {section === 'profile' && <form className="profile-editor" onSubmit={event => { event.preventDefault(); onSaveProfile({ profileName, activeFrame, activeTitle }) }}><div className={`profile-preview ${activeFrame.toLowerCase().replace(' ', '-')}`}><span className="profile-avatar">{profileName.slice(0, 1).toUpperCase()}</span><div><strong>{profileName}</strong><small>{activeTitle}</small></div></div><label>Display name<input maxLength="24" value={profileName} onChange={event => setProfileName(event.target.value)} /></label><p className="settings-note">Your equipped frame and title can be changed from Collections.</p><button className="save-profile" type="submit">Save profile <span>→</span></button></form>}
+    {section === 'collection' && <section className="settings-panel"><div className="settings-panel-heading"><div><p className="eyebrow">COLLECTION</p><h2>Frames & titles</h2></div><span>{frames.length - 1} frames · {titles.length - 1} titles</span></div><fieldset><legend>Profile frame</legend><div className="profile-options">{frames.map(frame => <button type="button" className={activeFrame === frame ? 'selected' : ''} key={frame} onClick={() => setActiveFrame(frame)}><span className={`option-frame ${frame.toLowerCase().replace(' ', '-')}`} /><strong>{frame}</strong>{activeFrame === frame && <em>Equipped</em>}</button>)}</div></fieldset><fieldset><legend>Profile title</legend><div className="title-options">{titles.map(title => <button type="button" className={activeTitle === title ? 'selected' : ''} key={title} onClick={() => setActiveTitle(title)}><strong>{title}</strong>{activeTitle === title && <em>Equipped</em>}</button>)}</div></fieldset><button className="save-profile" type="button" onClick={() => onSaveProfile({ profileName, activeFrame, activeTitle })}>Save collection <span>→</span></button></section>}
+    {section === 'preferences' && <section className="settings-panel preferences-panel"><div className="settings-panel-heading"><div><p className="eyebrow">PREFERENCES</p><h2>Learning experience</h2></div></div><label className="preference-row"><span><strong>Daily reminders</strong><small>Keep your daily missions visible.</small></span><input type="checkbox" defaultChecked /></label><label className="preference-row"><span><strong>Motion effects</strong><small>Play animations in lessons and rewards.</small></span><input type="checkbox" defaultChecked /></label><label className="preference-row"><span><strong>Sound effects</strong><small>Use audio feedback when available.</small></span><input type="checkbox" /></label></section>}
+    {section === 'progress' && <section className="settings-panel progress-panel"><div className="settings-panel-heading"><div><p className="eyebrow">PROGRESS</p><h2>Level {progression.level} · {progression.rank}</h2></div><strong>{wallet.xp || 0} XP</strong></div><div className="level-xp-track"><span style={{ width: `${progression.percent}%` }} /></div><div className="settings-progress-copy"><span>{progression.level === 100 ? 'Max level reached' : `${Math.max(0, progression.nextLevelXp - (wallet.xp || 0))} XP to level ${progression.level + 1}`}</span><span>{wallet.missions?.filter(mission => mission.completed).length || 0} missions complete</span></div><h3>Level rewards roadmap</h3><div className="settings-reward-list">{LEVEL_REWARDS.map(([rewardLevel, reward]) => <div className={rewardLevel <= progression.level ? 'unlocked' : ''} key={rewardLevel}><span>Level {rewardLevel}</span><strong>{reward}</strong></div>)}</div></section>}
   </section>
+}
+
+function AuthScreen({ onAuthenticated }) {
+  const [mode, setMode] = useState('login')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function submit(event) {
+    event.preventDefault()
+    setError('')
+    setBusy(true)
+    try {
+      if (firebaseEnabled) {
+        const credential = mode === 'login' ? await signInWithEmailAndPassword(firebaseAuth, email, password) : await createUserWithEmailAndPassword(firebaseAuth, email, password)
+        onAuthenticated({ id: credential.user.uid, email: credential.user.email }, null)
+      } else {
+        const response = await fetch(`/api/auth/${mode}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) })
+        const result = await response.json()
+        if (!response.ok) throw new Error(result.message || 'Authentication failed.')
+        onAuthenticated(result.user, result.progress)
+      }
+    } catch (requestError) {
+      setError(requestError.code === 'auth/email-already-in-use' ? 'An account with that email already exists.' : requestError.code === 'auth/invalid-credential' ? 'Email or password is incorrect.' : requestError.message)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return <main className="auth-page"><section className="auth-card"><div className="auth-mark">𝑥</div><p className="eyebrow">MATH MENTOR</p><h1>{mode === 'login' ? 'Welcome back' : 'Create your account'}</h1><p className="auth-intro">{mode === 'login' ? 'Continue your learning journey.' : 'Save your progress, collection, and rewards.'}</p><div className="auth-tabs"><button className={mode === 'login' ? 'active' : ''} onClick={() => setMode('login')}>Log in</button><button className={mode === 'signup' ? 'active' : ''} onClick={() => setMode('signup')}>Sign up</button></div><form onSubmit={submit}><label>Email<input type="email" required autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} /></label><label>Password<input type="password" required minLength="6" autoComplete={mode === 'login' ? 'current-password' : 'new-password'} value={password} onChange={event => setPassword(event.target.value)} /></label>{error && <p className="auth-error">{error}</p>}<button className="auth-submit" disabled={busy}>{busy ? 'Please wait...' : mode === 'login' ? 'Log in' : 'Create account'} <span>→</span></button></form></section></main>
 }
 
 function PlaceholderScreen({ tab, coins }) {
@@ -420,6 +471,7 @@ function TabBar({ activeTab, onChange }) {
 
 function StatusRail({ wallet, course, onMission, onJourney }) {
   const [clock, setClock] = useState(Date.now())
+  const [showRewards, setShowRewards] = useState(false)
   const progression = getLevelProgress(wallet.xp || 0)
   const missions = wallet.missions?.length ? wallet.missions : getMissionFallback()
   const completedMissions = missions.filter(mission => mission.completed).length
@@ -433,7 +485,8 @@ function StatusRail({ wallet, course, onMission, onJourney }) {
 
   return <aside className="status-rail">
     <div className="rail-topline"><button className="rail-journey" onClick={onJourney}><span className={`rail-journey-icon ${journeyMeta[1]}`}>{journeyMeta[0]}</span><div><p>ACTIVE JOURNEY</p><strong>{course || 'Choose a journey'}</strong></div><b>→</b></button><div className="rail-wallet"><span>✦</span><strong>{wallet.tokens || 0}</strong></div></div>
-    <section className="rail-level"><div className="rail-level-heading"><span className="level-hud-badge">{progression.level}</span><div><p>LEVEL {progression.level}</p><strong>{progression.rank}</strong></div></div><div className="rail-xp-label"><span>{wallet.xp || 0} XP</span><span>{progression.level === 100 ? 'MAX' : `${Math.max(0, progression.nextLevelXp - (wallet.xp || 0))} XP to go`}</span></div><div className="level-xp-track"><span style={{ width: `${progression.percent}%` }} /></div></section>
+    <button className="rail-level" onClick={() => setShowRewards(!showRewards)} aria-expanded={showRewards}><div className="rail-level-heading"><span className="level-hud-badge">{progression.level}</span><div><p>LEVEL {progression.level}</p><strong>{progression.rank}</strong></div><b>Roadmap →</b></div><div className="rail-xp-label"><span>{wallet.xp || 0} XP</span><span>{progression.level === 100 ? 'MAX' : `${Math.max(0, progression.nextLevelXp - (wallet.xp || 0))} XP to go`}</span></div><div className="level-xp-track"><span style={{ width: `${progression.percent}%` }} /></div></button>
+    {showRewards && <section className="rail-rewards"><header><strong>Level rewards</strong><button onClick={() => setShowRewards(false)} aria-label="Close level rewards">×</button></header>{LEVEL_REWARDS.map(([rewardLevel, reward]) => <div className={rewardLevel <= progression.level ? 'unlocked' : ''} key={rewardLevel}><span>Level {rewardLevel}</span><strong>{reward}</strong></div>)}</section>}
     <section className="rail-promo"><div><h2>Keep learning</h2><p>Build your streak with one more focused practice session.</p></div><span>✦</span><button onClick={() => onMission()}>VIEW MISSIONS</button></section>
     <section className={`rail-boost ${boostSeconds > 0 ? 'active' : ''}`}><span>2×</span><div><p>{boostSeconds > 0 ? 'XP SURGE ACTIVE' : 'XP SURGE'}</p><strong>{boostSeconds > 0 ? `${Math.floor(boostSeconds / 60)}:${String(boostSeconds % 60).padStart(2, '0')} remaining` : 'Visit Shop to activate'}</strong></div></section>
     <section className="rail-missions"><div className="rail-section-heading"><div><p>DAILY MISSIONS</p><strong>{completedMissions}/{missions.length} complete</strong></div><button onClick={onMission}>View</button></div>{missions.map(mission => <div className="rail-mission-item" key={mission.id}><span>{mission.title}</span><div className="rail-mission-track"><i style={{ width: `${Math.min(100, (mission.progress / mission.target) * 100)}%` }} /></div><small>{mission.progress}/{mission.target}</small></div>)}</section>
@@ -509,9 +562,9 @@ function Animation({ type }) {
 }
 
 function LessonIntro({ course, data, showTheory, setShowTheory, startQuiz, skipToPractice, close }) {
-  return <main className="lesson-page"><header className="lesson-nav"><button onClick={close}>← Back to path</button><span>LESSON · {course}</span><button className="skip" onClick={skipToPractice}>Skip to practice · 2 tokens</button></header><section className={`lesson-launch ${showTheory ? '' : 'theory-hidden'}`}>
+  return <main className="lesson-page"><header className="lesson-nav"><button onClick={close}>← Back to path</button><span>LESSON · {course}</span><button className="skip" onClick={skipToPractice}>Skip quiz · 2 tokens</button></header><section className={`lesson-launch ${showTheory ? '' : 'theory-hidden'}`}>
     {showTheory && <article className="theory-panel"><p className="eyebrow">{course.toUpperCase()} · FOUNDATIONS</p><h1>{data.title}</h1><p className="theory-intro">{data.intro}</p><section className="info-card"><h2>Key components</h2>{data.components.map(([name, description]) => <p key={name}><i>i</i><b>{name}:</b> {description}</p>)}</section><section className="info-card"><h2>How it works</h2><p>{data.intro} Follow the visual, work through the steps, then test yourself.</p></section><section className="interactive"><b>Interactive animation</b><Animation type={data.animation} /></section><button className="theory-toggle" onClick={() => setShowTheory(false)}>Hide theory</button></article>}
-    <aside className="quiz-launch"><span className="quiz-launch-number">{data.quiz.length}</span><p className="eyebrow">READY WHEN YOU ARE</p><h2>Quick check</h2><p>Test what you learned, then work through guided practice one step at a time.</p><div className="launch-actions"><button className="quiz-button" onClick={startQuiz}>Start quiz <span>→</span></button><button className="secondary-action" onClick={skipToPractice}>Skip to practice · 2 tokens</button></div>{!showTheory && <button className="theory-toggle" onClick={() => setShowTheory(true)}>Show theory</button>}</aside>
+    <aside className="quiz-launch"><span className="quiz-launch-number">{data.quiz.length}</span><p className="eyebrow">READY WHEN YOU ARE</p><h2>Quick check</h2><p>Test what you learned, then work through guided practice one step at a time.</p><div className="launch-actions"><button className="quiz-button" onClick={startQuiz}>Start quiz <span>→</span></button><button className="secondary-action" onClick={skipToPractice}>Skip quiz · 2 tokens</button></div>{!showTheory && <button className="theory-toggle" onClick={() => setShowTheory(true)}>Show theory</button>}</aside>
   </section></main>
 }
 
@@ -628,6 +681,8 @@ function LessonPage({ course, index, data, close, complete, onHint, onSkip }) {
 }
 
 function App() {
+  const [user, setUser] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
   const [courses, setCourses] = useState([])
   const [progress, setProgress] = useState({})
   const [course, setCourse] = useState(null)
@@ -638,25 +693,57 @@ function App() {
   const [walletNotice, setWalletNotice] = useState(null)
 
   useEffect(() => {
-    Promise.all([
-      fetch('/api/courses').then(response => response.json()),
-      fetch('/api/progress').then(response => response.json()),
-    ])
-      .then(([courseData, savedProgress]) => {
-        setCourses(courseData)
-        setProgress(savedProgress)
+    if (firebaseEnabled) {
+      return onAuthStateChanged(firebaseAuth, async firebaseUser => {
+        setUser(firebaseUser ? { id: firebaseUser.uid, email: firebaseUser.email } : null)
+        if (firebaseUser) {
+          try {
+            const [courseData, progressData] = await Promise.all([apiFetch('/api/courses').then(response => response.json()), apiFetch('/api/progress').then(response => response.json())])
+            setCourses(courseData)
+            setProgress(progressData)
+          } catch {
+            setError('Could not load your progress. Check the backend Firebase configuration.')
+          }
+        }
+        setAuthLoading(false)
       })
-      .catch(() => {
-        setError('Start the backend server to load courses and save progress.')
+    }
+    fetch('/api/auth/me')
+      .then(response => response.json())
+      .then(({ user: savedUser }) => {
+        setUser(savedUser)
+        if (!savedUser) return null
+        return Promise.all([fetch('/api/courses').then(response => response.json()), fetch('/api/progress').then(response => response.json())])
       })
+      .then(result => {
+        if (!result) return
+        setCourses(result[0])
+        setProgress(result[1])
+      })
+      .catch(() => setError('Start the backend server to load courses and save progress.'))
+      .finally(() => setAuthLoading(false))
   }, [])
+
+  function authenticated(savedUser, savedProgress) {
+    setUser(savedUser)
+    setProgress(savedProgress || {})
+    Promise.all([apiFetch('/api/courses').then(response => response.json()), apiFetch('/api/progress').then(response => response.json())]).then(([courseData, progressData]) => { setCourses(courseData); setProgress(progressData) })
+  }
+
+  async function logout() {
+    if (firebaseEnabled) await signOut(firebaseAuth)
+    else await fetch('/api/auth/logout', { method: 'POST' })
+    setUser(null)
+    setProgress({})
+    setCourse(null)
+  }
 
   const selected = courses.find(item => item.name === course)
   const completed = progress[course] || 0
   const wallet = progress.meta || { tokens: 25, xp: 0, missions: [] }
 
   async function recordActivity(activity) {
-    const response = await fetch('/api/activity', {
+    const response = await apiFetch('/api/activity', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(activity),
@@ -674,7 +761,7 @@ function App() {
   }
 
   async function spendHint() {
-    const response = await fetch('/api/hint', { method: 'POST' })
+    const response = await apiFetch('/api/hint', { method: 'POST' })
     const result = await response.json()
     if (!response.ok) return { ok: false, message: result.message || 'You need 1 token to use a hint.' }
     setProgress(result.progress)
@@ -684,7 +771,7 @@ function App() {
   }
 
   async function spendSkip() {
-    const response = await fetch('/api/skip', { method: 'POST' })
+    const response = await apiFetch('/api/skip', { method: 'POST' })
     const result = await response.json()
     if (!response.ok) return { ok: false, message: result.message || 'You need 2 tokens to skip a step.' }
     setProgress(result.progress)
@@ -694,7 +781,7 @@ function App() {
   }
 
   async function purchaseShopItem(item) {
-    const response = await fetch('/api/shop/purchase', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item }) })
+    const response = await apiFetch('/api/shop/purchase', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ item }) })
     const result = await response.json()
     if (!response.ok) {
       setWalletNotice(result.message || 'You do not have enough tokens.')
@@ -708,7 +795,7 @@ function App() {
   }
 
   async function purchaseXpSurge() {
-    const response = await fetch('/api/shop/xp-surge', { method: 'POST' })
+    const response = await apiFetch('/api/shop/xp-surge', { method: 'POST' })
     const result = await response.json()
     if (!response.ok) {
       setWalletNotice(result.message || 'You do not have enough tokens.')
@@ -721,7 +808,7 @@ function App() {
   }
 
   async function saveProfile(profile) {
-    const response = await fetch('/api/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profile) })
+    const response = await apiFetch('/api/profile', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(profile) })
     const result = await response.json()
     if (!response.ok) {
       setWalletNotice(result.message || 'Profile could not be saved.')
@@ -756,7 +843,7 @@ function App() {
   async function complete() {
     const nextLesson = Math.min(AVAILABLE_LESSON_COUNT, lessonData.index + 1)
     const nextProgress = Math.max(completed, nextLesson)
-    const response = await fetch(`/api/progress/${encodeURIComponent(course)}`, {
+    const response = await apiFetch(`/api/progress/${encodeURIComponent(course)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ completed: nextProgress }),
@@ -771,13 +858,15 @@ function App() {
     setLessonData(null)
   }
 
+  if (authLoading) return <main className="auth-page"><p className="auth-loading">Loading your account...</p></main>
+  if (!user) return <AuthScreen onAuthenticated={authenticated} />
   if (lessonData) return <LessonPage course={course} index={lessonData.index} data={lessonData.data} close={() => setLessonData(null)} complete={complete} onHint={spendHint} onSkip={spendSkip} />
   const activeTabDetails = TABS.find(tab => tab.id === activeTab)
   const onJourney = () => { setCourse(null); setActiveTab('journey') }
   if (activeTab === 'mission') return <AppFrame activeTab={activeTab} onChange={setActiveTab} wallet={wallet} course={course} onMission={() => setActiveTab('mission')} onJourney={onJourney}><MissionScreen wallet={wallet} />{walletNotice && <div className="wallet-notice">{walletNotice}</div>}</AppFrame>
   if (activeTab === 'practice') return <AppFrame activeTab={activeTab} onChange={setActiveTab} wallet={wallet} course={course} onMission={() => setActiveTab('mission')} onJourney={onJourney}><PracticeHub onActivity={recordActivity} onHint={spendHint} onSkip={spendSkip} />{walletNotice && <div className="wallet-notice">{walletNotice}</div>}</AppFrame>
   if (activeTab === 'shop') return <AppFrame activeTab={activeTab} onChange={setActiveTab} wallet={wallet} course={course} onMission={() => setActiveTab('mission')} onJourney={onJourney}><ShopScreen wallet={wallet} onPurchase={purchaseShopItem} onBoost={purchaseXpSurge} />{walletNotice && <div className="wallet-notice">{walletNotice}</div>}</AppFrame>
-  if (activeTab === 'settings') return <AppFrame activeTab={activeTab} onChange={setActiveTab} wallet={wallet} course={course} onMission={() => setActiveTab('mission')} onJourney={onJourney}><SettingsScreen wallet={wallet} onSaveProfile={saveProfile} />{walletNotice && <div className="wallet-notice">{walletNotice}</div>}</AppFrame>
+  if (activeTab === 'settings') return <AppFrame activeTab={activeTab} onChange={setActiveTab} wallet={wallet} course={course} onMission={() => setActiveTab('mission')} onJourney={onJourney}><SettingsScreen wallet={wallet} onSaveProfile={saveProfile} onLogout={logout} />{walletNotice && <div className="wallet-notice">{walletNotice}</div>}</AppFrame>
   if (activeTab !== 'journey') return <AppFrame activeTab={activeTab} onChange={setActiveTab} wallet={wallet} course={course} onMission={() => setActiveTab('mission')} onJourney={onJourney}><PlaceholderScreen coins={wallet.tokens} tab={activeTabDetails} />{walletNotice && <div className="wallet-notice">{walletNotice}</div>}</AppFrame>
   if (!course) return <AppFrame activeTab={activeTab} onChange={setActiveTab} wallet={wallet} course={course} onMission={() => setActiveTab('mission')} onJourney={onJourney}><section className="course-picker compact-course-picker"><header className="picker-header"><p>WELCOME TO</p><h1>Choose a journey</h1><span>Pick a learning path to continue.</span></header>{error && <p className="api-error">{error}</p>}<div className="course-list">{courses.map(item => <button key={item.name} className={`course-option ${COURSE_META[item.name][1]}`} onClick={() => setCourse(item.name)}><i>{COURSE_META[item.name][0]}</i><span><b>{item.name}</b><small>{COURSE_META[item.name][2]}</small><em>{progress[item.name] || 0}/3 complete · {item.lessons.length} lessons →</em></span></button>)}</div></section>{walletNotice && <div className="wallet-notice">{walletNotice}</div>}</AppFrame>
   const lessons = selected?.lessons || []

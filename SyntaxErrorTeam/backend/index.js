@@ -1,9 +1,25 @@
+require('dotenv').config()
 const express = require('express')
 const fs = require('fs')
 const path = require('path')
+const crypto = require('crypto')
+const { cert, getApps, initializeApp } = require('firebase-admin/app')
+const { getAuth: getFirebaseAuth } = require('firebase-admin/auth')
 const app = express()
 const port = process.env.PORT || 3001
 const progressFile = path.join(__dirname, 'progress.json')
+const usersFile = path.join(__dirname, 'users.json')
+const sessionsFile = path.join(__dirname, 'sessions.json')
+let firebaseAuth = null
+if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
+  try {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_JSON)
+    const app = getApps()[0] || initializeApp({ credential: cert(serviceAccount) })
+    firebaseAuth = getFirebaseAuth(app)
+  } catch {
+    console.error('FIREBASE_SERVICE_ACCOUNT_JSON is invalid; Firebase verification is disabled.')
+  }
+}
 
 const DAILY_MISSION_DEFINITIONS = [
   ['Complete 5 practice problems', 5, 25, 'practiceProblems', 5],
@@ -137,9 +153,10 @@ const lessons = {
 
 const MAX_AVAILABLE_LESSONS = 3
 
-function loadProgress() {
+function loadProgress(userId) {
   try {
-    const progress = JSON.parse(fs.readFileSync(progressFile, 'utf8'))
+    const user = userId && readJson(usersFile, []).find(candidate => candidate.id === userId)
+    const progress = user ? user.progress : JSON.parse(fs.readFileSync(progressFile, 'utf8'))
     const defaultMeta = createMeta()
     const meta = progress.meta || defaultMeta
     meta.profileName ||= defaultMeta.profileName
@@ -161,8 +178,126 @@ function loadProgress() {
   }
 }
 
-function saveProgress(progress) {
+function saveProgress(progress, userId) {
+  if (userId) {
+    const users = readJson(usersFile, [])
+    const user = users.find(candidate => candidate.id === userId)
+    if (user) {
+      user.progress = progress
+      writeJson(usersFile, users)
+      return
+    }
+  }
   fs.writeFileSync(progressFile, JSON.stringify(progress, null, 2))
+}
+
+function readJson(file, fallback) {
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'))
+  } catch {
+    return fallback
+  }
+}
+
+function writeJson(file, value) {
+  fs.writeFileSync(file, JSON.stringify(value, null, 2))
+}
+
+function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
+  return { salt, hash: crypto.scryptSync(password, salt, 64).toString('hex') }
+}
+
+function passwordsMatch(password, user) {
+  const hash = crypto.scryptSync(password, user.passwordSalt, 64).toString('hex')
+  return crypto.timingSafeEqual(Buffer.from(hash, 'hex'), Buffer.from(user.passwordHash, 'hex'))
+}
+
+function getCookie(request, name) {
+  const cookies = String(request.headers.cookie || '').split(';').map(cookie => cookie.trim())
+  return cookies.find(cookie => cookie.startsWith(`${name}=`))?.slice(name.length + 1)
+}
+
+function currentUser(request) {
+  const sessionId = getCookie(request, 'mathmentor_session')
+  const session = sessionId && readJson(sessionsFile, {})[sessionId]
+  if (!session) return null
+  return readJson(usersFile, []).find(user => user.id === session.userId) || null
+}
+
+function getOrCreateFirebaseUser(decodedToken) {
+  const users = readJson(usersFile, [])
+  let user = users.find(candidate => candidate.id === `firebase:${decodedToken.uid}`)
+  if (!user) {
+    user = { id: `firebase:${decodedToken.uid}`, email: decodedToken.email || '', progress: users.length ? { meta: createMeta() } : readJson(progressFile, { meta: createMeta() }) }
+    users.push(user)
+    writeJson(usersFile, users)
+  }
+  return user
+}
+
+async function requireAuth(request, response, next) {
+  const user = currentUser(request)
+  if (user) {
+    request.user = user
+    return next()
+  }
+  const authorization = String(request.headers.authorization || '')
+  if (firebaseAuth && authorization.startsWith('Bearer ')) {
+    try {
+      request.user = getOrCreateFirebaseUser(await firebaseAuth.verifyIdToken(authorization.slice(7)))
+      return next()
+    } catch {
+      return response.status(401).json({ message: 'Your Firebase session is no longer valid.' })
+    }
+  }
+  return response.status(401).json({ message: 'Please log in to continue.' })
+}
+
+function setSession(response, userId) {
+  const sessions = readJson(sessionsFile, {})
+  const sessionId = crypto.randomBytes(32).toString('hex')
+  sessions[sessionId] = { userId, createdAt: Date.now() }
+  writeJson(sessionsFile, sessions)
+  response.setHeader('Set-Cookie', `mathmentor_session=${sessionId}; HttpOnly; SameSite=Lax; Path=/; Max-Age=604800`)
+}
+
+function authMe(request, response) {
+  const user = currentUser(request)
+  response.json({ user: user ? { id: user.id, email: user.email } : null })
+}
+
+function authSignup(request, response) {
+  const email = String(request.body?.email || '').trim().toLowerCase()
+  const password = String(request.body?.password || '')
+  if (!/^\S+@\S+\.\S+$/.test(email)) return response.status(400).json({ message: 'Enter a valid email address.' })
+  if (password.length < 6) return response.status(400).json({ message: 'Password must be at least 6 characters.' })
+  const users = readJson(usersFile, [])
+  if (users.some(user => user.email === email)) return response.status(409).json({ message: 'An account with that email already exists.' })
+  const passwordData = hashPassword(password)
+  const hasExistingAccount = users.length > 0
+  const user = { id: crypto.randomUUID(), email, passwordHash: passwordData.hash, passwordSalt: passwordData.salt, progress: hasExistingAccount ? { meta: createMeta() } : readJson(progressFile, { meta: createMeta() }) }
+  users.push(user)
+  writeJson(usersFile, users)
+  setSession(response, user.id)
+  return response.status(201).json({ user: { id: user.id, email: user.email }, progress: user.progress })
+}
+
+function authLogin(request, response) {
+  const email = String(request.body?.email || '').trim().toLowerCase()
+  const password = String(request.body?.password || '')
+  const user = readJson(usersFile, []).find(candidate => candidate.email === email)
+  if (!user || !passwordsMatch(password, user)) return response.status(401).json({ message: 'Email or password is incorrect.' })
+  setSession(response, user.id)
+  return response.json({ user: { id: user.id, email: user.email }, progress: user.progress })
+}
+
+function authLogout(request, response) {
+  const sessionId = getCookie(request, 'mathmentor_session')
+  const sessions = readJson(sessionsFile, {})
+  if (sessionId) delete sessions[sessionId]
+  writeJson(sessionsFile, sessions)
+  response.setHeader('Set-Cookie', 'mathmentor_session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0')
+  response.json({ ok: true })
 }
 
 function getCourseList(_request, response) {
@@ -188,12 +323,12 @@ function getLesson(request, response) {
   return response.json(requestedLesson)
 }
 
-function getProgress(_request, response) {
-  response.json(loadProgress())
+function getProgress(request, response) {
+  response.json(loadProgress(request.user.id))
 }
 
-function spendTokens(cost, response) {
-  const progress = loadProgress()
+function spendTokens(cost, request, response) {
+  const progress = loadProgress(request.user.id)
   const meta = progress.meta
 
   if (meta.tokens < cost) {
@@ -201,16 +336,16 @@ function spendTokens(cost, response) {
   }
 
   meta.tokens -= cost
-  saveProgress(progress)
+  saveProgress(progress, request.user.id)
   return response.json({ progress, cost })
 }
 
-function spendHint(_request, response) {
-  return spendTokens(1, response)
+function spendHint(request, response) {
+  return spendTokens(1, request, response)
 }
 
-function spendSkip(_request, response) {
-  return spendTokens(2, response)
+function spendSkip(request, response) {
+  return spendTokens(2, request, response)
 }
 
 function drawReward(rewards) {
@@ -227,28 +362,28 @@ function drawReward(rewards) {
 function purchaseShopItem(request, response) {
   const item = SHOP_ITEMS[request.body?.item]
   if (!item) return response.status(400).json({ message: 'That shop item does not exist.' })
-  const progress = loadProgress()
+  const progress = loadProgress(request.user.id)
   if (progress.meta.tokens < item.cost) return response.status(402).json({ message: `You need ${item.cost} tokens for this item.`, progress })
   const reward = drawReward(item.rewards)
   const collectionKey = request.body.item === 'frameBox' ? 'frames' : 'titles'
   const isNew = !progress.meta.collection[collectionKey].includes(reward.name)
   progress.meta.tokens -= item.cost
   if (isNew) progress.meta.collection[collectionKey].push(reward.name)
-  saveProgress(progress)
+  saveProgress(progress, request.user.id)
   return response.json({ progress, reward, isNew })
 }
 
-function purchaseXpSurge(_request, response) {
-  const progress = loadProgress()
+function purchaseXpSurge(request, response) {
+  const progress = loadProgress(request.user.id)
   if (progress.meta.tokens < 30) return response.status(402).json({ message: 'You need 30 tokens for the XP surge.', progress })
   progress.meta.tokens -= 30
   progress.meta.xpBoostUntil = Date.now() + 30 * 60 * 1000
-  saveProgress(progress)
+  saveProgress(progress, request.user.id)
   return response.json({ progress })
 }
 
 function updateProfile(request, response) {
-  const progress = loadProgress()
+  const progress = loadProgress(request.user.id)
   const meta = progress.meta
   const profileName = String(request.body?.profileName || '').trim().slice(0, 24)
   const frame = String(request.body?.activeFrame || '')
@@ -262,7 +397,7 @@ function updateProfile(request, response) {
   meta.profileName = profileName
   meta.activeFrame = frame
   meta.activeTitle = title
-  saveProgress(progress)
+  saveProgress(progress, request.user.id)
   return response.json({ progress })
 }
 
@@ -274,7 +409,7 @@ function getMissionProgress(meta, stat) {
 }
 
 function recordActivity(request, response) {
-  const progress = loadProgress()
+  const progress = loadProgress(request.user.id)
   const meta = progress.meta
   const startingTokens = meta.tokens
   const startingXp = meta.xp
@@ -322,7 +457,7 @@ function recordActivity(request, response) {
     }
   }
 
-  saveProgress(progress)
+  saveProgress(progress, request.user.id)
   response.json({ progress, activityReward: { tokens: meta.tokens - startingTokens, xp: meta.xp - startingXp } })
 }
 
@@ -332,10 +467,10 @@ function updateProgress(request, response) {
     0,
     Math.min(MAX_AVAILABLE_LESSONS, requestedCompletedCount),
   )
-  const progress = loadProgress()
+  const progress = loadProgress(request.user.id)
 
   progress[request.params.course] = completed
-  saveProgress(progress)
+  saveProgress(progress, request.user.id)
 
   response.json({ course: request.params.course, completed, progress })
 }
@@ -344,13 +479,17 @@ app.use(express.json())
 
 app.get('/api/courses', getCourseList)
 app.get('/api/courses/:course/lessons/:lesson', getLesson)
-app.get('/api/progress', getProgress)
-app.post('/api/hint', spendHint)
-app.post('/api/skip', spendSkip)
-app.post('/api/shop/purchase', purchaseShopItem)
-app.post('/api/shop/xp-surge', purchaseXpSurge)
-app.put('/api/profile', updateProfile)
-app.put('/api/progress/:course', updateProgress)
-app.post('/api/activity', recordActivity)
+app.get('/api/auth/me', authMe)
+app.post('/api/auth/signup', authSignup)
+app.post('/api/auth/login', authLogin)
+app.post('/api/auth/logout', authLogout)
+app.get('/api/progress', requireAuth, getProgress)
+app.post('/api/hint', requireAuth, spendHint)
+app.post('/api/skip', requireAuth, spendSkip)
+app.post('/api/shop/purchase', requireAuth, purchaseShopItem)
+app.post('/api/shop/xp-surge', requireAuth, purchaseXpSurge)
+app.put('/api/profile', requireAuth, updateProfile)
+app.put('/api/progress/:course', requireAuth, updateProgress)
+app.post('/api/activity', requireAuth, recordActivity)
 
 app.listen(port, () => console.log(`Math Mentor API listening on http://localhost:${port}`))

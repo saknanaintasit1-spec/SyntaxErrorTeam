@@ -26,7 +26,7 @@
         "Pythagoras"
       ]
     },
-    "dailyDate": "2026-09-05",
+    "dailyDate": "2026-09-06",
     "missions": [
       {
         "id": 1,
@@ -40,26 +40,26 @@
       },
       {
         "id": 2,
-        "title": "Complete practice in 2 different topics",
-        "tokens": 9,
-        "xp": 45,
-        "progress": 2,
-        "target": 2,
-        "stat": "topicCount",
-        "completed": true
+        "title": "Practice for 10 minutes",
+        "tokens": 8,
+        "xp": 40,
+        "progress": 0,
+        "target": 10,
+        "stat": "practiceMinutes",
+        "completed": false
       },
       {
         "id": 3,
-        "title": "Complete 5 practice problems",
-        "tokens": 5,
-        "xp": 25,
-        "progress": 5,
-        "target": 5,
-        "stat": "practiceProblems",
-        "completed": true
+        "title": "Complete a practice session with 80%+ accuracy",
+        "tokens": 9,
+        "xp": 45,
+        "progress": 0,
+        "target": 1,
+        "stat": "sessionsAt80",
+        "completed": false
       }
     ],
-    "profileName": "Math Learner",
+    "profileName": "Poony ahh",
     "collection": {
       "frames": [
         "Notebook",
@@ -79,7 +79,7 @@
         "Mathematical Legend"
       ]
     },
-    "activeFrame": "Simple",
+    "activeFrame": "Notebook",
     "activeTitle": "Number Learner",
     "xpBoostUntil": 1788632187720
   }
