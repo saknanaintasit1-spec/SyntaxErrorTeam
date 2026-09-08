@@ -6,6 +6,7 @@ const crypto = require('crypto')
 const { cert, getApps, initializeApp } = require('firebase-admin/app')
 const { getAuth: getFirebaseAuth } = require('firebase-admin/auth')
 const app = express()
+app.use(express.json())
 const port = process.env.PORT || 3001
 const progressFile = path.join(__dirname, 'progress.json')
 const usersFile = path.join(__dirname, 'users.json')
@@ -492,4 +493,68 @@ app.put('/api/profile', requireAuth, updateProfile)
 app.put('/api/progress/:course', requireAuth, updateProgress)
 app.post('/api/activity', requireAuth, recordActivity)
 
+
+app.post('/api/ai', async (req, res) => {
+  try {
+    const { message } = req.body
+
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 30000) // 30 second timeout
+
+    const response = await fetch('http://localhost:11434/api/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'llama3.2:1b',
+        messages: [
+          {
+            role: 'system',
+            content: `You are Math Mentor AI.
+You are a mathematics tutor for Grade 8 students.
+Explain math step-by-step.
+Give hints before giving the final answer.
+Only help with mathematics.
+Keep your answers concise and under 200 words.`
+          },
+          {
+            role: 'user',
+            content: message
+          }
+        ],
+        stream: false,
+        options: {
+          num_predict: 150, // Limit response length
+          temperature: 0.7
+        }
+      }),
+      signal: controller.signal
+    })
+
+    clearTimeout(timeout)
+
+    if (!response.ok) {
+      throw new Error(`Ollama API returned ${response.status}`)
+    }
+
+    const data = await response.json()
+
+    res.json({
+      answer: data.message?.content || data.message || 'No response generated'
+    })
+  } catch (error) {
+    console.error('AI Error:', error.message)
+    
+    if (error.name === 'AbortError') {
+      return res.status(504).json({
+        error: 'AI request timed out. The model might be too slow. Try a simpler question.'
+      })
+    }
+    
+    res.status(500).json({
+      error: 'AI request failed. Make sure Ollama is running with the llama 3.2:1b model.'
+    })
+  }
+})
 app.listen(port, () => console.log(`Math Mentor API listening on http://localhost:${port}`))

@@ -9,60 +9,61 @@
       "Polynomials": 3,
       "Pythagoras & Geometry": 3,
       "meta": {
-        "tokens": 9140,
-        "xp": 160,
+        "tokens": 9091,
+        "xp": 690,
         "stats": {
-          "practiceProblems": 6,
-          "correctStreak": 2,
-          "bestCorrectStreak": 3,
-          "lessonsCompleted": 1,
-          "noHintProblems": 4,
-          "correctSteps": 16,
+          "practiceProblems": 21,
+          "correctStreak": 1,
+          "bestCorrectStreak": 8,
+          "lessonsCompleted": 3,
+          "noHintProblems": 19,
+          "correctSteps": 31,
           "retrySolved": 0,
-          "sessionsAt80": 6,
-          "sessionsAt100": 5,
-          "algebraProblems": 0,
+          "sessionsAt80": 21,
+          "sessionsAt100": 17,
+          "algebraProblems": 15,
           "pythagorasProblems": 4,
           "polynomialProblems": 2,
           "challengeProblems": 0,
           "practiceMinutes": 0,
-          "firstAttemptProblems": 3,
+          "firstAttemptProblems": 15,
           "topics": [
             "Polynomials",
-            "Pythagoras"
+            "Pythagoras",
+            "Algebra"
           ]
         },
-        "dailyDate": "2026-09-06",
+        "dailyDate": "2026-09-07",
         "missions": [
           {
             "id": 1,
-            "title": "Retry and solve 3 previously missed questions",
+            "title": "Complete 1 challenge problem",
             "tokens": 8,
             "xp": 40,
             "progress": 0,
-            "target": 3,
-            "stat": "retrySolved",
+            "target": 1,
+            "stat": "challengeProblems",
             "completed": false
           },
           {
             "id": 2,
-            "title": "Practice for 10 minutes",
-            "tokens": 8,
-            "xp": 40,
-            "progress": 0,
-            "target": 10,
-            "stat": "practiceMinutes",
-            "completed": false
+            "title": "Complete 5 practice problems",
+            "tokens": 5,
+            "xp": 25,
+            "progress": 5,
+            "target": 5,
+            "stat": "practiceProblems",
+            "completed": true
           },
           {
             "id": 3,
-            "title": "Complete a practice session with 80%+ accuracy",
-            "tokens": 9,
-            "xp": 45,
-            "progress": 0,
-            "target": 1,
-            "stat": "sessionsAt80",
-            "completed": false
+            "title": "Complete 10 correct steps",
+            "tokens": 7,
+            "xp": 35,
+            "progress": 10,
+            "target": 10,
+            "stat": "correctSteps",
+            "completed": true
           }
         ],
         "profileName": "Poony ahh",
@@ -87,7 +88,7 @@
         },
         "activeFrame": "Notebook",
         "activeTitle": "Number Learner",
-        "xpBoostUntil": 1788632187720
+        "xpBoostUntil": 1788712097920
       }
     }
   },
@@ -160,6 +161,86 @@
           }
         ]
       }
+    }
+  },
+  {
+    "id": "20e07c52-f5a2-4ba2-8767-71f031097fc5",
+    "email": "43515@prc.ac.th",
+    "passwordHash": "554a06c675c9f632d965d0c4b71e13eb48a2330450ce15503369dae3bb33db7c0bedf25005217be00ed224849775e7d9d6c42732b8084334bcecdcd042192c26",
+    "passwordSalt": "d6710e089a3d2251f5a478fb8581b174",
+    "progress": {
+      "meta": {
+        "tokens": 1,
+        "xp": 240,
+        "profileName": "Poon",
+        "collection": {
+          "frames": [
+            "Pencil",
+            "Notebook"
+          ],
+          "titles": [
+            "Math Student"
+          ]
+        },
+        "activeFrame": "Simple",
+        "activeTitle": "Number Learner",
+        "xpBoostUntil": 0,
+        "stats": {
+          "practiceProblems": 5,
+          "correctStreak": 5,
+          "bestCorrectStreak": 5,
+          "lessonsCompleted": 3,
+          "noHintProblems": 5,
+          "correctSteps": 10,
+          "retrySolved": 0,
+          "sessionsAt80": 5,
+          "sessionsAt100": 5,
+          "algebraProblems": 0,
+          "pythagorasProblems": 5,
+          "polynomialProblems": 0,
+          "challengeProblems": 0,
+          "practiceMinutes": 0,
+          "firstAttemptProblems": 5,
+          "topics": [
+            "Pythagoras"
+          ]
+        },
+        "dailyDate": "2026-09-08",
+        "missions": [
+          {
+            "id": 1,
+            "title": "Complete 10 correct steps",
+            "tokens": 7,
+            "xp": 35,
+            "progress": 10,
+            "target": 10,
+            "stat": "correctSteps",
+            "completed": true
+          },
+          {
+            "id": 2,
+            "title": "Complete 5 practice problems",
+            "tokens": 5,
+            "xp": 25,
+            "progress": 5,
+            "target": 5,
+            "stat": "practiceProblems",
+            "completed": true
+          },
+          {
+            "id": 3,
+            "title": "Earn 100 XP today",
+            "tokens": 10,
+            "xp": 50,
+            "progress": 0,
+            "target": 100,
+            "stat": "xp",
+            "completed": false
+          }
+        ]
+      },
+      "Algebra": 1,
+      "Pythagoras & Geometry": 2
     }
   }
 ]
