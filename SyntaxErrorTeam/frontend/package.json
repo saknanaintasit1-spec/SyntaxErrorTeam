@@ -1,9 +1,9 @@
 {
   "name": "mathmentorai",
-  "private": true,
+  "private": false,
   "version": "0.0.0",
   "type": "module",
-  "homepage" : "https://mathmentor.github.io/SyntaxErrorTeam/",
+  "homepage": "https://saknanaintasit1-spec.github.io/SyntaxErrorTeam/",
   "scripts": {
     "deploy" : "gh-pages -d dist",
     "predeploy": "npm run build",
