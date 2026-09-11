@@ -66,6 +66,63 @@ function todayKey() {
   return new Date().toISOString().slice(0, 10)
 }
 
+function updateStreak(stats) {
+  const today = todayKey()
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10)
+  
+  if (stats.lastActiveDate === today) {
+    // Already active today, streak continues
+    return stats
+  } else if (stats.lastActiveDate === yesterday) {
+    // Active yesterday, increment streak
+    stats.streakDays += 1
+  } else if (stats.lastActiveDate !== today) {
+    // Streak broken or first time
+    stats.streakDays = 1
+  }
+  
+  stats.lastActiveDate = today
+  return stats
+}
+
+function recordMistake(stats, category, type, problem) {
+  const mistake = {
+    category,
+    type,
+    problem,
+    timestamp: Date.now(),
+    attempted: false
+  }
+  
+  // Add to mistakes array (keep last 50)
+  stats.mistakes = [mistake, ...stats.mistakes].slice(0, 50)
+  
+  // Track weak areas
+  const key = `${category}-${type}`
+  stats.weakAreas[key] = (stats.weakAreas[key] || 0) + 1
+  
+  return stats
+}
+
+function getPersonalizedRecommendations(stats) {
+  // Find most common mistakes
+  const mistakeCounts = {}
+  stats.mistakes.forEach(mistake => {
+    const key = `${mistake.category}-${mistake.type}`
+    mistakeCounts[key] = (mistakeCounts[key] || 0) + 1
+  })
+  
+  // Sort by frequency
+  const sortedMistakes = Object.entries(mistakeCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3) // Top 3 weak areas
+  
+  return sortedMistakes.map(([key, count]) => {
+    const [category, type] = key.split('-')
+    return { category, type, count, priority: count }
+  })
+}
+
 function createDailyMissions() {
   return [...DAILY_MISSION_DEFINITIONS]
     .sort(() => Math.random() - 0.5)
@@ -77,6 +134,9 @@ const createStats = () => ({
   practiceProblems: 0,
   correctStreak: 0,
   bestCorrectStreak: 0,
+  currentStreak: 0,
+  lastActiveDate: null,
+  streakDays: 0,
   lessonsCompleted: 0,
   noHintProblems: 0,
   correctSteps: 0,
@@ -90,6 +150,8 @@ const createStats = () => ({
   practiceMinutes: 0,
   firstAttemptProblems: 0,
   topics: [],
+  mistakes: [], // Track missed problems for personalized practice
+  weakAreas: {}, // Track performance by topic
 })
 
 const createMeta = () => ({
@@ -422,6 +484,9 @@ function recordActivity(request, response) {
 
   if (!isPractice && !isLesson) return response.status(400).json({ message: 'Activity kind must be practice or lesson.' })
 
+  // Update streak for any activity
+  updateStreak(meta.stats)
+
   if (isPractice) {
     const accuracy = Math.max(0, Math.min(1, Number(activity.accuracy) || 0))
     meta.tokens += 2
@@ -430,6 +495,12 @@ function recordActivity(request, response) {
     meta.stats.correctSteps += Math.max(0, Number(activity.correctSteps) || 0)
     meta.stats.correctStreak = activity.correct ? meta.stats.correctStreak + 1 : 0
     meta.stats.bestCorrectStreak = Math.max(meta.stats.bestCorrectStreak, meta.stats.correctStreak)
+    
+    // Record mistakes for personalized practice
+    if (!activity.correct && activity.mistake) {
+      recordMistake(meta.stats, topic, activity.type, activity.mistake)
+    }
+    
     if (!activity.usedHint) meta.stats.noHintProblems += 1
     if (activity.retrySolved) meta.stats.retrySolved += 1
     if (accuracy >= 0.8) meta.stats.sessionsAt80 += 1
@@ -459,7 +530,15 @@ function recordActivity(request, response) {
   }
 
   saveProgress(progress, request.user.id)
-  response.json({ progress, activityReward: { tokens: meta.tokens - startingTokens, xp: meta.xp - startingXp } })
+  
+  // Include personalized recommendations in response
+  const recommendations = getPersonalizedRecommendations(meta.stats)
+  
+  response.json({ 
+    progress, 
+    activityReward: { tokens: meta.tokens - startingTokens, xp: meta.xp - startingXp },
+    recommendations 
+  })
 }
 
 function updateProgress(request, response) {
@@ -493,6 +572,12 @@ app.put('/api/profile', requireAuth, updateProfile)
 app.put('/api/progress/:course', requireAuth, updateProgress)
 app.post('/api/activity', requireAuth, recordActivity)
 
+app.get('/api/recommendations', requireAuth, (request, response) => {
+  const progress = loadProgress(request.user.id)
+  const recommendations = getPersonalizedRecommendations(progress.meta.stats)
+  response.json({ recommendations })
+})
+
 
 app.post('/api/ai', async (req, res) => {
   try {
@@ -512,18 +597,23 @@ app.post('/api/ai', async (req, res) => {
           {
             role: 'system',
             content: `You are Math Mentor AI.
+
 You are a mathematics tutor for Grade 8 students.
 Explain math step-by-step.
 Give hints before giving the final answer.
 Only help with mathematics.
-Keep your answers concise and under 200 words.`
+Keep your answers concise and under 200 words.
+Do not use * formatting
+Instead use clean formatting with clear steps and examples.
+combined with bullet heads
+`
           },
           {
             role: 'user',
             content: message
           }
         ],
-        stream: false,
+        stream: true,
         options: {
           num_predict: 150, // Limit response length
           temperature: 0.7

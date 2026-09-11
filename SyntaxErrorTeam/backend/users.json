@@ -9,7 +9,7 @@
       "Polynomials": 3,
       "Pythagoras & Geometry": 3,
       "meta": {
-        "tokens": 9091,
+        "tokens": 90914554425,
         "xp": 690,
         "stats": {
           "practiceProblems": 21,
@@ -33,37 +33,37 @@
             "Algebra"
           ]
         },
-        "dailyDate": "2026-09-07",
+        "dailyDate": "2026-09-08",
         "missions": [
           {
             "id": 1,
-            "title": "Complete 1 challenge problem",
-            "tokens": 8,
-            "xp": 40,
+            "title": "Solve 5 Pythagoras problems",
+            "tokens": 7,
+            "xp": 35,
             "progress": 0,
-            "target": 1,
-            "stat": "challengeProblems",
+            "target": 5,
+            "stat": "pythagorasProblems",
             "completed": false
           },
           {
             "id": 2,
-            "title": "Complete 5 practice problems",
-            "tokens": 5,
-            "xp": 25,
-            "progress": 5,
-            "target": 5,
-            "stat": "practiceProblems",
-            "completed": true
+            "title": "Earn 100 XP today",
+            "tokens": 10,
+            "xp": 50,
+            "progress": 0,
+            "target": 100,
+            "stat": "xp",
+            "completed": false
           },
           {
             "id": 3,
-            "title": "Complete 10 correct steps",
-            "tokens": 7,
-            "xp": 35,
-            "progress": 10,
-            "target": 10,
-            "stat": "correctSteps",
-            "completed": true
+            "title": "Complete 5 problems on the first attempt",
+            "tokens": 8,
+            "xp": 40,
+            "progress": 0,
+            "target": 5,
+            "stat": "firstAttemptProblems",
+            "completed": false
           }
         ],
         "profileName": "Poony ahh",
@@ -86,8 +86,8 @@
             "Mathematical Legend"
           ]
         },
-        "activeFrame": "Notebook",
-        "activeTitle": "Number Learner",
+        "activeFrame": "Purple Glow",
+        "activeTitle": "Mathematical Legend",
         "xpBoostUntil": 1788712097920
       }
     }
@@ -171,38 +171,42 @@
     "progress": {
       "meta": {
         "tokens": 1,
-        "xp": 240,
+        "xp": 450,
         "profileName": "Poon",
         "collection": {
           "frames": [
             "Pencil",
-            "Notebook"
+            "Notebook",
+            "Simple"
           ],
           "titles": [
-            "Math Student"
+            "Math Student",
+            "Equation Explorer",
+            "Number Learner"
           ]
         },
-        "activeFrame": "Simple",
+        "activeFrame": "Notebook",
         "activeTitle": "Number Learner",
         "xpBoostUntil": 0,
         "stats": {
-          "practiceProblems": 5,
-          "correctStreak": 5,
-          "bestCorrectStreak": 5,
+          "practiceProblems": 26,
+          "correctStreak": 7,
+          "bestCorrectStreak": 9,
           "lessonsCompleted": 3,
-          "noHintProblems": 5,
-          "correctSteps": 10,
+          "noHintProblems": 25,
+          "correctSteps": 30,
           "retrySolved": 0,
-          "sessionsAt80": 5,
-          "sessionsAt100": 5,
-          "algebraProblems": 0,
+          "sessionsAt80": 26,
+          "sessionsAt100": 20,
+          "algebraProblems": 21,
           "pythagorasProblems": 5,
           "polynomialProblems": 0,
           "challengeProblems": 0,
           "practiceMinutes": 0,
-          "firstAttemptProblems": 5,
+          "firstAttemptProblems": 20,
           "topics": [
-            "Pythagoras"
+            "Pythagoras",
+            "Algebra"
           ]
         },
         "dailyDate": "2026-09-08",

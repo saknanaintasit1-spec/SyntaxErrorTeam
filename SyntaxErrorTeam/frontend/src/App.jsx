@@ -57,12 +57,11 @@ function getLevelProgress(xp = 0) {
 }
 
 const TABS = [
-  { id: 'journey', label: 'Journey', icon: '⌂' },
-  { id: 'mission', label: 'Mission', icon: '▱' },
-  { id: 'practice', label: 'Practice', icon: '✎' },
-  { id: 'shop', label: 'Shop', icon: '🛒' },
-  { id: 'settings', label: 'Settings', icon: '⚙' },
-  {id : 'ai', label: "Ai Tutor", icon: '🤖'}
+  { id: 'journey', label: 'Journey', icon: <img src = "/SyntaxErrorTeam/journey.jpg" alt = '⌂'/>  },
+  { id: 'mission', label: 'Mission', icon: <img src = "/SyntaxErrorTeam/mission.jpg" alt = '▱' />},
+  { id: 'practice', label: 'Practice', icon: <img src = "/SyntaxErrorTeam/practice.jpg" alt = '✎' /> },
+  { id: 'shop', label: 'Shop', icon: <img src = "/SyntaxErrorTeam/Shop.jpg" alt = '🛒' /> },
+  { id: 'settings', label: 'Settings', icon: <img src = "/SyntaxErrorTeam/settings.jpg" alt = '⚙' /> },
 ]
 
 const MISSION_CATALOG = [
@@ -422,105 +421,7 @@ function SettingsScreen({ wallet, onSaveProfile, onLogout }) {
     {section === 'progress' && <section className="settings-panel progress-panel"><div className="settings-panel-heading"><div><p className="eyebrow">PROGRESS</p><h2>Level {progression.level} · {progression.rank}</h2></div><strong>{wallet.xp || 0} XP</strong></div><div className="level-xp-track"><span style={{ width: `${progression.percent}%` }} /></div><div className="settings-progress-copy"><span>{progression.level === 100 ? 'Max level reached' : `${Math.max(0, progression.nextLevelXp - (wallet.xp || 0))} XP to level ${progression.level + 1}`}</span><span>{wallet.missions?.filter(mission => mission.completed).length || 0} missions complete</span></div><h3>Level rewards roadmap</h3><div className="settings-reward-list">{LEVEL_REWARDS.map(([rewardLevel, reward]) => <div className={rewardLevel <= progression.level ? 'unlocked' : ''} key={rewardLevel}><span>Level {rewardLevel}</span><strong>{reward}</strong></div>)}</div></section>}
   </section>
 }
-function AITutorScreen() {
-  const [message, setMessage] = useState('')
-  const [messages, setMessages] = useState([])
-  const [isResponding, setIsResponding] = useState(false)
 
-  async function sendMessage(event) {
-    event.preventDefault()
-
-    if (!message.trim()) return
-
-    const userMessage = message
-    setMessage('')
-    setIsResponding(true)
-
-    setMessages(prev => [
-      ...prev,
-      { role: 'user', content: userMessage }
-    ])
-
-    try {
-      const response = await apiFetch('/api/ai', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          message: userMessage
-        })
-      })
-
-      const data = await response.json()
-
-      setMessages(prev => [
-        ...prev,
-        { role: 'assistant', content: data.answer }
-      ])
-    } catch (error) {
-      setMessages(prev => [
-        ...prev,
-        { role: 'assistant', content: 'Sorry, I had trouble responding. Please try again.' }
-      ])
-    } finally {
-      setIsResponding(false)
-    }
-  }
-
-  return (
-    <section className="screen ai-screen">
-      <header className="ai-header">
-        <p className="eyebrow">YOUR MATH ASSISTANT</p>
-        <h1>AI Tutor</h1>
-        <p>Hey is me its MathMentority, Ask me anything, I know about a million Math problems.</p>
-      </header>
-
-      <div className="ai-messages">
-        {messages.length === 0 && (
-          <div className="ai-empty">
-            <span>🤖</span>
-            <h2>What are you working on?</h2>
-            <p>
-              Ask me to explain a concept, give you a hint,
-              or help you understand a problem.
-            </p>
-          </div>
-        )}
-
-        {messages.map((msg, index) => (
-          <div className={`ai-message ${msg.role}`} key={index}>
-            {msg.role === 'user' && <span className="ai-message-label">You</span>}
-            {msg.role === 'assistant' && <span className="ai-message-label">AI Tutor</span>}
-            <div className="ai-message-content">{msg.content}</div>
-          </div>
-        ))}
-
-        {isResponding && (
-          <div className="ai-message assistant responding">
-            <span className="ai-message-label">AI Tutor</span>
-            <div className="ai-message-content">
-              <span className="responding-indicator">Responding...</span>
-            </div>
-          </div>
-        )}
-      </div>
-
-      <form className="ai-input-form" onSubmit={sendMessage}>
-        <input
-          value={message}
-          onChange={event => setMessage(event.target.value)}
-          placeholder="Ask a math question..."
-          disabled={isResponding}
-        />
-
-        <button type="submit" disabled={isResponding}>
-          {isResponding ? 'Sending...' : 'Send →'}
-        </button>
-      </form>
-    </section>
-  )
-}
 function AuthScreen({ onAuthenticated }) {
   const [mode, setMode] = useState('login')
   const [email, setEmail] = useState('')
@@ -563,9 +464,16 @@ function PlaceholderScreen({ tab, coins }) {
 }
 
 function TabBar({ activeTab, onChange }) {
-  return <nav className="tab-bar" aria-label="Main navigation">
+  return (
+    <nav className="tab-bar" aria-label="Main navigation">
+    <div className="tab-logo">
+        <img
+          src="/SyntaxErrorTeam/mathmentor.jpeg"
+          alt="MathMentor AI"
+        />
+      </div>
     {TABS.map(tab => <button aria-current={tab.id === activeTab ? 'page' : undefined} className={tab.id === activeTab ? 'active' : ''} key={tab.id} onClick={() => onChange(tab.id)}><span>{tab.icon}</span>{tab.label}</button>)}
-  </nav>
+  </nav>)
 }
 
 function StatusRail({ wallet, course, onMission, onJourney }) {
@@ -966,21 +874,6 @@ function App() {
   if (activeTab === 'practice') return <AppFrame activeTab={activeTab} onChange={setActiveTab} wallet={wallet} course={course} onMission={() => setActiveTab('mission')} onJourney={onJourney}><PracticeHub onActivity={recordActivity} onHint={spendHint} onSkip={spendSkip} />{walletNotice && <div className="wallet-notice">{walletNotice}</div>}</AppFrame>
   if (activeTab === 'shop') return <AppFrame activeTab={activeTab} onChange={setActiveTab} wallet={wallet} course={course} onMission={() => setActiveTab('mission')} onJourney={onJourney}><ShopScreen wallet={wallet} onPurchase={purchaseShopItem} onBoost={purchaseXpSurge} />{walletNotice && <div className="wallet-notice">{walletNotice}</div>}</AppFrame>
   if (activeTab === 'settings') return <AppFrame activeTab={activeTab} onChange={setActiveTab} wallet={wallet} course={course} onMission={() => setActiveTab('mission')} onJourney={onJourney}><SettingsScreen wallet={wallet} onSaveProfile={saveProfile} onLogout={logout} />{walletNotice && <div className="wallet-notice">{walletNotice}</div>}</AppFrame>
-  if (activeTab === 'ai') {
-    return (
-      <AppFrame
-        activeTab={activeTab}
-        onChange={setActiveTab}
-        wallet={wallet}
-        course={course}
-        onMission={() => setActiveTab('mission')}
-        onJourney={onJourney}
-      >
-        <AITutorScreen />
-        {walletNotice && <div className="wallet-notice">{walletNotice}</div>}
-      </AppFrame>
-    )
-  }
   if (activeTab !== 'journey') return <AppFrame activeTab={activeTab} onChange={setActiveTab} wallet={wallet} course={course} onMission={() => setActiveTab('mission')} onJourney={onJourney}><PlaceholderScreen coins={wallet.tokens} tab={activeTabDetails} />{walletNotice && <div className="wallet-notice">{walletNotice}</div>}</AppFrame>
   if (!course) return <AppFrame activeTab={activeTab} onChange={setActiveTab} wallet={wallet} course={course} onMission={() => setActiveTab('mission')} onJourney={onJourney}><section className="course-picker compact-course-picker"><header className="picker-header"><p>WELCOME TO</p><h1>Choose a journey</h1><span>Pick a learning path to continue.</span></header>{error && <p className="api-error">{error}</p>}<div className="course-list">{courses.map(item => <button key={item.name} className={`course-option ${COURSE_META[item.name][1]}`} onClick={() => setCourse(item.name)}><i>{COURSE_META[item.name][0]}</i><span><b>{item.name}</b><small>{COURSE_META[item.name][2]}</small><em>{progress[item.name] || 0}/3 complete · {item.lessons.length} lessons →</em></span></button>)}</div></section>{walletNotice && <div className="wallet-notice">{walletNotice}</div>}</AppFrame>
   const lessons = selected?.lessons || []
